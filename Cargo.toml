@@ -1,4 +1,5 @@
 [package]
+[package]
 name = "taskkit"
 version = "0.1.0"
 edition = "2021"
@@ -8,19 +9,28 @@ authors = ["Phenotype <dev@phenotype.dev>"]
 readme = "README.md"
 repository = "https://github.com/phenotype-dev/Tasken"
 documentation = "https://docs.rs/taskkit"
+rust-version = "1.75"
 
 [dependencies]
+# Async
 async-trait = "0.1"
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "4.4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "1.0"
-tokio = { version = "1", features = ["full"] }
-uuid = { version = "1", features = ["v4"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Error handling
+thiserror = "2.0"
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
 
 [features]
 default = []
-
-[workspace]
-members = []
