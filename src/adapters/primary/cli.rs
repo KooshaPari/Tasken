@@ -1,8 +1,8 @@
 //! CLI adapter for command-line interaction.
 
-use clap::{Parser, Subcommand};
 use crate::application::{CreateTask, ListTasks};
-use crate::domain::{TaskState, Priority};
+use crate::domain::{Priority, TaskState};
+use clap::{Parser, Subcommand};
 
 /// CLI arguments.
 #[derive(Parser, Debug)]
@@ -104,7 +104,13 @@ impl CliAdapter {
         let cli = Cli::parse();
 
         match cli.command {
-            Command::Create { name, description, priority, timeout, tag } => {
+            Command::Create {
+                name,
+                description,
+                priority,
+                timeout,
+                tag,
+            } => {
                 println!("Creating task: {}", name);
                 let priority = Cli::parse_priority(&priority);
                 let _timeout = timeout.map(std::time::Duration::from_secs);
@@ -121,13 +127,15 @@ impl CliAdapter {
                     cmd = cmd.with_tag(t);
                 }
 
-                println!("Task created: {:?}", serde_json::to_string_pretty(&cmd).unwrap());
+                println!(
+                    "Task created: {:?}",
+                    serde_json::to_string_pretty(&cmd).unwrap()
+                );
             }
             Command::List { state, tag, limit } => {
                 println!("Listing tasks (limit: {})", limit);
                 let state_filter = state.and_then(|s| Cli::parse_state(&s));
-                let query = ListTasks::new()
-                    .with_limit(limit);
+                let query = ListTasks::new().with_limit(limit);
                 let query = match (state_filter, tag) {
                     (Some(s), Some(t)) => query.with_state(s).with_tag(t),
                     (Some(s), None) => query.with_state(s),

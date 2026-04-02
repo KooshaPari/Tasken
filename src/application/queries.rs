@@ -1,8 +1,8 @@
 //! Task query definitions.
 
-use super::super::domain::{Task, TaskId, TaskState};
 use super::super::domain::errors::TaskError;
 use super::super::domain::events::TaskEvent;
+use super::super::domain::{Task, TaskId, TaskState};
 use super::services::TaskService;
 
 /// Query to get a task by ID.
@@ -60,7 +60,9 @@ impl ListTasks {
 
     /// Execute the query.
     pub async fn execute(self, service: &TaskService) -> Result<Vec<Task>, TaskError> {
-        service.list_tasks(self.state_filter, self.tag_filter, self.limit).await
+        service
+            .list_tasks(self.state_filter, self.tag_filter, self.limit)
+            .await
     }
 }
 

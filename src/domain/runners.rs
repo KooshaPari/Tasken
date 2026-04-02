@@ -1,9 +1,9 @@
 //! Task runner implementations.
 
+use super::events::{TaskEvent, TaskEventKind};
+use super::{Task, TaskError, TaskResult, TaskState};
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
-use super::{Task, TaskState, TaskResult, TaskError};
-use super::events::{TaskEvent, TaskEventKind};
 
 /// Trait for task runners.
 #[async_trait]

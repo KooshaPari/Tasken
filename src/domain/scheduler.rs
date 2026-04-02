@@ -1,7 +1,7 @@
 //! Scheduling logic for task execution.
 
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
 
 /// Schedule identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -40,11 +40,13 @@ impl ScheduleKind {
     pub fn next_run(&self, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
         match self {
             ScheduleKind::Once { at } => {
-                if *at > from { Some(*at) } else { None }
+                if *at > from {
+                    Some(*at)
+                } else {
+                    None
+                }
             }
-            ScheduleKind::Interval { every } => {
-                Some(from + Duration::seconds(*every))
-            }
+            ScheduleKind::Interval { every } => Some(from + Duration::seconds(*every)),
             ScheduleKind::Cron { expression } => {
                 // Simplified cron parsing
                 // In production, use the `cron` crate
@@ -57,9 +59,7 @@ impl ScheduleKind {
                 // Simplified daily parsing
                 Some(from + Duration::days(1))
             }
-            ScheduleKind::Weekly { .. } => {
-                Some(from + Duration::weeks(1))
-            }
+            ScheduleKind::Weekly { .. } => Some(from + Duration::weeks(1)),
         }
     }
 }
@@ -103,7 +103,9 @@ impl Schedule {
         Self {
             id: ScheduleId::new(),
             task_id: task_id.into(),
-            kind: ScheduleKind::Interval { every: every_seconds },
+            kind: ScheduleKind::Interval {
+                every: every_seconds,
+            },
             active: true,
             last_run: None,
             next_run: Some(now + Duration::seconds(every_seconds)),
@@ -114,7 +116,9 @@ impl Schedule {
     /// Create a new cron schedule.
     pub fn cron(task_id: impl Into<String>, expression: impl Into<String>) -> Self {
         let now = Utc::now();
-        let kind = ScheduleKind::Cron { expression: expression.into() };
+        let kind = ScheduleKind::Cron {
+            expression: expression.into(),
+        };
         Self {
             id: ScheduleId::new(),
             task_id: task_id.into(),

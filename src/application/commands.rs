@@ -1,7 +1,7 @@
 //! Task command definitions.
 
-use super::super::domain::{Task, TaskId, Priority, RetryPolicy, TaskState};
 use super::super::domain::errors::TaskError;
+use super::super::domain::{Priority, RetryPolicy, Task, TaskId, TaskState};
 use super::services::TaskService;
 
 /// Command to create a new task.

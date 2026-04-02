@@ -1,16 +1,16 @@
 //! Task application service.
 
-use std::sync::Arc;
+use super::commands::{CancelTask, CreateTask, RetryTask};
+use super::queries::{GetTask, GetTaskHistory, ListTasks};
+use crate::domain::errors::TaskError;
+use crate::domain::{
+    events::TaskEvent,
+    ports::{QueuePort, StoragePort},
+    Priority, RetryPolicy, Task, TaskId, TaskResult, TaskState,
+};
 use async_trait::async_trait;
 use chrono::Utc;
-use crate::domain::{
-    Task, TaskState, TaskId, Priority, RetryPolicy, TaskResult,
-    ports::{StoragePort, QueuePort},
-    events::TaskEvent,
-};
-use crate::domain::errors::TaskError;
-use super::commands::{CreateTask, CancelTask, RetryTask};
-use super::queries::{GetTask, ListTasks, GetTaskHistory};
+use std::sync::Arc;
 
 /// Task application service.
 pub struct TaskService {
@@ -51,7 +51,9 @@ impl TaskService {
         task = task.with_data(cmd.data);
 
         // Persist the task
-        self.storage.save_task(&task).await
+        self.storage
+            .save_task(&task)
+            .await
             .map_err(|e| TaskError::StorageError(e))?;
 
         Ok(task)
@@ -59,7 +61,9 @@ impl TaskService {
 
     /// Get a task by ID.
     pub async fn get_task(&self, task_id: &TaskId) -> Result<Option<Task>, TaskError> {
-        self.storage.load_task(&task_id.0).await
+        self.storage
+            .load_task(&task_id.0)
+            .await
             .map_err(|e| TaskError::StorageError(e))
     }
 
@@ -70,7 +74,10 @@ impl TaskService {
         tag_filter: Option<String>,
         limit: Option<usize>,
     ) -> Result<Vec<Task>, TaskError> {
-        let mut tasks = self.storage.list_tasks().await
+        let mut tasks = self
+            .storage
+            .list_tasks()
+            .await
             .map_err(|e| TaskError::StorageError(e))?;
 
         // Apply filters
@@ -91,14 +98,23 @@ impl TaskService {
     }
 
     /// Cancel a task.
-    pub async fn cancel_task(&self, task_id: TaskId, reason: Option<String>) -> Result<(), TaskError> {
-        let mut task = self.storage.load_task(&task_id.0).await
+    pub async fn cancel_task(
+        &self,
+        task_id: TaskId,
+        reason: Option<String>,
+    ) -> Result<(), TaskError> {
+        let mut task = self
+            .storage
+            .load_task(&task_id.0)
+            .await
             .map_err(|e| TaskError::StorageError(e))?
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
         task.transition_to(TaskState::Cancelled)?;
 
-        self.storage.save_task(&task).await
+        self.storage
+            .save_task(&task)
+            .await
             .map_err(|e| TaskError::StorageError(e))?;
 
         Ok(())
@@ -106,7 +122,10 @@ impl TaskService {
 
     /// Retry a failed task.
     pub async fn retry_task(&self, task_id: TaskId) -> Result<Task, TaskError> {
-        let mut task = self.storage.load_task(&task_id.0).await
+        let mut task = self
+            .storage
+            .load_task(&task_id.0)
+            .await
             .map_err(|e| TaskError::StorageError(e))?
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
@@ -126,7 +145,9 @@ impl TaskService {
         task.error = None;
         task.updated_at = Utc::now();
 
-        self.storage.save_task(&task).await
+        self.storage
+            .save_task(&task)
+            .await
             .map_err(|e| TaskError::StorageError(e))?;
 
         Ok(task)
@@ -140,15 +161,23 @@ impl TaskService {
 
     /// Execute a task.
     pub async fn execute_task(&self, task_id: &TaskId) -> Result<TaskResult, TaskError> {
-        let mut task = self.storage.load_task(&task_id.0).await
+        let mut task = self
+            .storage
+            .load_task(&task_id.0)
+            .await
             .map_err(|e| TaskError::StorageError(e))?
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
         // Execute using the queue
-        self.queue.enqueue(task.clone()).await
+        self.queue
+            .enqueue(task.clone())
+            .await
             .map_err(|e| TaskError::StorageError(e))?;
 
         // In a real implementation, the queue worker would execute and store the result
-        Ok(task.success_result(serde_json::json!({"status": "queued"}), std::time::Duration::ZERO))
+        Ok(task.success_result(
+            serde_json::json!({"status": "queued"}),
+            std::time::Duration::ZERO,
+        ))
     }
 }

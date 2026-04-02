@@ -21,18 +21,17 @@
 //! runner.execute(task).unwrap();
 //! ```
 
-pub mod domain;
-pub mod application;
 pub mod adapters;
+pub mod application;
+pub mod domain;
 pub mod infrastructure;
 
 // Re-exports for convenience
-pub use domain::{
-    Task, Workflow, Schedule, TaskState, TaskResult,
-    TaskRunner, Scheduler, RetryPolicy, Timeout,
-};
-pub use domain::errors::TaskError;
 pub use application::services::TaskService;
+pub use domain::errors::TaskError;
+pub use domain::{
+    RetryPolicy, Schedule, Scheduler, Task, TaskResult, TaskRunner, TaskState, Timeout, Workflow,
+};
 pub use infrastructure::error::TaskKitError;
 
 /// Framework version

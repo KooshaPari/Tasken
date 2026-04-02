@@ -1,8 +1,8 @@
 //! Adapters layer - infrastructure implementations.
 
+pub mod plugins;
 pub mod primary;
 pub mod secondary;
-pub mod plugins;
 
 // Re-exports
 pub use primary::cli::CliAdapter;

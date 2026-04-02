@@ -1,10 +1,10 @@
 //! Workflow definitions and DAG orchestration.
 
-use serde::{Deserialize, Serialize};
-use petgraph::graph::{DiGraph, NodeIndex};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use super::TaskId;
+use chrono::{DateTime, Utc};
+use petgraph::graph::{DiGraph, NodeIndex};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Workflow identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -154,7 +154,9 @@ impl Workflow {
 
         // Add edges based on dependencies
         for step in &self.steps {
-            let target_idx = self.node_map.get(&step.id)
+            let target_idx = self
+                .node_map
+                .get(&step.id)
                 .ok_or_else(|| format!("Step not found: {}", step.id))?;
 
             for dep in &step.depends_on {
@@ -235,10 +237,7 @@ mod tests {
     #[test]
     fn test_workflow_with_steps() {
         let workflow = Workflow::new("test")
-            .with_step(
-                WorkflowStep::new("step-1")
-                    .with_dependency("step-0")
-            )
+            .with_step(WorkflowStep::new("step-1").with_dependency("step-0"))
             .with_step(WorkflowStep::new("step-0"));
 
         assert_eq!(workflow.steps.len(), 2);

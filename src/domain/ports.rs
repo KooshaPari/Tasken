@@ -1,7 +1,7 @@
 //! Port definitions - interfaces for external dependencies.
 
+use super::{Schedule, Task, TaskResult, Workflow};
 use async_trait::async_trait;
-use super::{Task, Workflow, Schedule, TaskResult};
 
 /// Port for task storage operations.
 #[async_trait]

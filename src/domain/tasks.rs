@@ -1,11 +1,11 @@
 //! Task entity and related types.
 
+use super::errors::TaskError;
+use super::events::TaskEvent;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use super::events::TaskEvent;
-use super::errors::TaskError;
 
 /// Unique task identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
