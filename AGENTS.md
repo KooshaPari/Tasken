@@ -1,48 +1,21 @@
 # AGENTS.md — Tasken
 
-Extends shelf-level AGENTS.md rules for Tasken.
+This repository is part of the Phenotype ecosystem.
 
-## Project Identity
+## Quick Links
 
-- **Name**: Tasken
-- **Description**: Task execution framework with scheduling and workflow support
-- **Language**: Rust
+- **Project governance:** See `CLAUDE.md` in this repository
+- **Phenotype org guidance:** `/repos/CLAUDE.md`
+- **Global agent instructions:** `~/.claude/AGENTS.md`
+- **Work tracking:** AgilePlus at `/repos/AgilePlus`
 
-## Project-Specific Rules
+## Operating Model
 
-### Test-First Mandate
+1. Before implementing: Check AgilePlus for existing specs
+2. Quality gates: See `CLAUDE.md` for build/test/lint commands
+3. Worktrees: Use `repos/Tasken-wtrees/<topic>/` for features
+4. Integration: Commit to `main` after gates pass
 
-- **For NEW modules**: test file MUST exist before implementation file
-- **For BUG FIXES**: failing test MUST be written before the fix
-- **For REFACTORS**: existing tests must pass before AND after
+---
 
-### Quality Gates
-
-All PRs must pass:
-- `cargo test --workspace`
-- `cargo clippy --workspace -- -D warnings`
-- `cargo fmt --check`
-
-### Commit Messages
-
-Format: `<type>(<scope>): <description>`
-
-Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`
-
-### File Organization
-
-```
-src/
-├── lib.rs           # Main library entry
-├── executor/        # Task execution engine
-├── scheduler/       # Scheduling logic
-├── workflow/        # Workflow definitions
-└── task/            # Task traits and types
-```
-
-## Testing Requirements
-
-- Unit tests for all public APIs
-- Integration tests for workflow execution
-- Property-based tests for scheduler
-- Minimum 80% code coverage
+**Parent contract:** See `CLAUDE.md` and `/repos/AGENTS.md` for complete governance.
