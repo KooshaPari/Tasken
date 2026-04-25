@@ -95,6 +95,41 @@ async def main():
 asyncio.run(main())
 ```
 
+## Governance & Development
+
+**AgilePlus Integration**: All work tracked in `/repos/AgilePlus`. Review `CLAUDE.md` for development policies and standards.
+
+**Quality Gates**:
+```bash
+cargo test --workspace           # Test suite (min 80% coverage)
+cargo clippy --workspace -- -D warnings  # Linting (zero warnings)
+cargo fmt --check                # Format validation
+cargo doc --open                 # Documentation generation
+```
+
+**Architecture Pattern**: Tasken follows hexagonal (ports & adapters) architecture to maintain clean separation between domain logic, application services, and infrastructure concerns.
+
+## Performance & Observability
+
+- **Built-in Metrics**: Task execution times, retry counts, and workflow DAG metrics
+- **Structured Logging**: Full execution tracing for debugging distributed workflows
+- **Benchmarking**: Dedicated `benches/` directory for performance profiling
+
+## Cross-Repo Integration
+
+Tasken integrates with `phenotype-bus` for event streaming and works alongside Sidekick for agent-driven task distribution. Use Stashly's state machine for workflow state management.
+
+## Related Phenotype Projects
+
+- **[Sidekick](../Sidekick)** — Agent dispatch for task execution
+- **[Stashly](../Stashly)** — State machines & event sourcing
+- **[phenotype-shared](../phenotype-shared)** — Shared utilities
+- **[AgilePlus](../AgilePlus)** — Specification & planning
+
 ## License
 
 MIT OR Apache-2.0
+
+**Status**: Active development  
+**Maintained by**: Phenotype Org  
+**Last Updated**: 2026-04-24
