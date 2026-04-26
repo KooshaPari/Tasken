@@ -1,5 +1,9 @@
 # Tasken
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/KooshaPari/Tasken/actions/workflows/ci.yml/badge.svg)](https://github.com/KooshaPari/Tasken/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
+
 **Universal task execution framework with scheduling, workflow orchestration, DAG support, and plugin system.**
 
 A comprehensive task execution engine with implementations in Rust and Python.
