@@ -6,13 +6,13 @@
 
 | Category | File | Purpose |
 |----------|------|---------|
-| **ARCHITECTURE** | `docs/worklogs/ARCHITECTURE.md` | ADRs, design decisions, refactoring |
-| **RESEARCH** | `docs/worklogs/RESEARCH.md` | Technology exploration, analysis |
-| **GOVERNANCE** | `docs/worklogs/GOVERNANCE.md` | Policy, quality gates, compliance |
+| **ARCHITECTURE** | [ARCHITECTURE.md](./ARCHITECTURE.md) | ADRs, design decisions, refactoring |
+| **RESEARCH** | [RESEARCH.md](./RESEARCH.md) | Technology exploration, analysis |
+| **GOVERNANCE** | [GOVERNANCE.md](./GOVERNANCE.md) | Policy, quality gates, compliance |
 
 ## Adding Entries
 
-Use the format in `AGENT_ONBOARDING.md` or reference this template:
+Use the standard worklog entry shape below:
 
 ```markdown
 ## YYYY-MM-DD - Entry Title
@@ -32,4 +32,5 @@ Brief description.
 - [ ] Action item
 ```
 
-See `/repos/AgilePlus/docs/worklogs/AGENT_ONBOARDING.md` for complete format guidelines.
+For ecosystem-wide worklog guidance, follow the canonical AgilePlus worklog onboarding
+document in the Phenotype shelf.
