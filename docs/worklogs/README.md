@@ -6,9 +6,9 @@
 
 | Category | File | Purpose |
 |----------|------|---------|
-| **ARCHITECTURE** | [ARCHITECTURE.md](ARCHITECTURE.md) | ADRs, design decisions, refactoring |
-| **RESEARCH** | [RESEARCH.md](RESEARCH.md) | Technology exploration, analysis |
-| **GOVERNANCE** | [GOVERNANCE.md](GOVERNANCE.md) | Policy, quality gates, compliance |
+| **ARCHITECTURE** | [ARCHITECTURE.md](./ARCHITECTURE.md) | ADRs, design decisions, refactoring |
+| **RESEARCH** | [RESEARCH.md](./RESEARCH.md) | Technology exploration, analysis |
+| **GOVERNANCE** | [GOVERNANCE.md](./GOVERNANCE.md) | Policy, quality gates, compliance |
 
 ## Adding Entries
 
