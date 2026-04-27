@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   release-drafter:
-    uses: KooshaPari/phenoShared/.github/workflows/reusable-release-drafter.yml
+    uses: KooshaPari/phenoShared/.github/workflows/reusable-release-drafter.yml@main
     with:
       config-name: release-drafter.yml
     permissions:
