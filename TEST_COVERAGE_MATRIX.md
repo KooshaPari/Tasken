@@ -10,11 +10,11 @@
 
 | Metric | Value |
 |--------|-------|
-| Functional Requirements | TBD |
-| Test Files | TBD |
-| Test Functions | TBD |
+| Functional Requirements | Not yet mapped |
+| Test Files | Not yet counted |
+| Test Functions | Not yet counted |
 | Coverage Target | 80% |
-| Current Coverage | TBD |
+| Current Coverage | Not yet measured |
 
 ---
 
@@ -43,7 +43,7 @@
 
 | FR ID | Description | Test Files | Coverage Status |
 |-------|-------------|------------|-----------------|
-| TBD | TBD | TBD | TBD |
+| Open question | Task scheduling, workflow orchestration, DAG execution, plugin loading, and observability | Not yet mapped | Pending mapping |
 
 ---
 
@@ -51,17 +51,17 @@
 
 | Test File | Purpose | FRs Covered |
 |-----------|---------|-------------|
-| TBD | TBD | TBD |
+| Not yet mapped | Not yet documented | Open question |
 
 ---
 
 ## Coverage Gaps
 
 ### Critical Gaps
-1. TBD
+1. No FR-to-test mapping has been recorded for the Rust scheduler, workflow engine, or plugin system.
 
 ### Partial Coverage
-1. TBD
+1. Coverage counts for Rust `src/**/*_test.rs` and Python `tests/integration/` are not yet measured here.
 
 ---
 
