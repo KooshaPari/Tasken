@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
