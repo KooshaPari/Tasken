@@ -32,7 +32,7 @@ jobs:
           cargo bench --all-features 2>&1 | tee benchmark.log
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@6f8efc29b200d32929f49075959781ed54ec270c
         with:
           name: benchmark-results
           path: benchmark.log

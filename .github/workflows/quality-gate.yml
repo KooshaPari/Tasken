@@ -182,7 +182,7 @@ jobs:
           cat report.md
 
       - name: Comment PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           script: |
             const fs = require('fs');
