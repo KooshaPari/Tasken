@@ -6,8 +6,9 @@ use crate::domain::errors::TaskError;
 use crate::domain::{
     events::TaskEvent,
     ports::{QueuePort, StoragePort},
-    Priority, RetryPolicy, Task, TaskId, TaskResult, TaskState,
+    TaskResult,
 };
+use crate::domain::tasks::{Priority, RetryPolicy, Task, TaskId, TaskState};
 use async_trait::async_trait;
 use chrono::Utc;
 use std::sync::Arc;

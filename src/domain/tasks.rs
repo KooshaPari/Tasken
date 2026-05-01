@@ -211,8 +211,10 @@ impl Task {
     /// Check if a state transition is valid.
     pub fn can_transition_to(&self, new_state: &TaskState) -> bool {
         match (&self.state, new_state) {
-            // Pending can transition to anything
-            (TaskState::Pending, _) => true,
+            // Pending can only go to Scheduled or Running
+            (TaskState::Pending, TaskState::Scheduled) => true,
+            (TaskState::Pending, TaskState::Running) => true,
+            (TaskState::Pending, TaskState::Cancelled) => true,
             // Scheduled can go to Running, Cancelled
             (TaskState::Scheduled, TaskState::Running) => true,
             (TaskState::Scheduled, TaskState::Cancelled) => true,
@@ -316,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_invalid_transition() {
-        let task = Task::new("test");
+        let mut task = Task::new("test");
         // Can't go directly from Pending to Completed
         assert!(task.transition_to(TaskState::Completed).is_err());
     }

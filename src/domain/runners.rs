@@ -1,7 +1,8 @@
 //! Task runner implementations.
 
-use super::events::{TaskEvent, TaskEventKind};
-use super::{Task, TaskError, TaskResult, TaskState};
+use super::errors::TaskError;
+use super::tasks::{Task, TaskState};
+use super::TaskResult;
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
 
@@ -12,7 +13,7 @@ pub trait TaskRunner: Send + Sync {
     fn execute(&self, task: &mut Task) -> Result<TaskResult, TaskError>;
 
     /// Execute a task asynchronously.
-    async fn execute_async(&self, task: &mut Task) -> Result<TaskResult, TaskError>;
+    async fn execute_async(self: Box<Self>, task: Task) -> Result<TaskResult, TaskError>;
 }
 
 /// Synchronous task runner.
@@ -30,6 +31,7 @@ impl Default for SyncRunner {
     }
 }
 
+#[async_trait]
 impl TaskRunner for SyncRunner {
     fn execute(&self, task: &mut Task) -> Result<TaskResult, TaskError> {
         // Transition to running
@@ -49,13 +51,12 @@ impl TaskRunner for SyncRunner {
         Ok(task.success_result(serde_json::json!({"status": "ok"}), duration))
     }
 
-    async fn execute_async(&self, task: &mut Task) -> Result<TaskResult, TaskError> {
-        // For sync runner, just run in blocking thread
-        let task_id = task.id.clone();
+    async fn execute_async(self: Box<Self>, task: Task) -> Result<TaskResult, TaskError> {
+        // For sync runner, run in blocking thread
+        let task_name = task.name.clone();
         let result = tokio::task::spawn_blocking(move || {
-            let mut t = Task::new("temp");
-            t.id = task_id;
-            self.execute(&mut t)
+            let mut t = Task::new(task_name);
+            SyncRunner::new().execute(&mut t)
         })
         .await
         .map_err(|e| TaskError::ExecutionFailed(e.to_string()))?;
@@ -82,13 +83,13 @@ impl Default for AsyncRunner {
 #[async_trait]
 impl TaskRunner for AsyncRunner {
     fn execute(&self, task: &mut Task) -> Result<TaskResult, TaskError> {
-        // Use tokio runtime for async execution
-        let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| TaskError::ExecutionFailed(e.to_string()))?;
-        rt.block_on(self.execute_async(task))
+        // Cannot execute async runner synchronously
+        Err(TaskError::InvalidOperation(
+            "AsyncRunner requires async execution".to_string(),
+        ))
     }
 
-    async fn execute_async(&self, task: &mut Task) -> Result<TaskResult, TaskError> {
+    async fn execute_async(self: Box<Self>, mut task: Task) -> Result<TaskResult, TaskError> {
         task.transition_to(TaskState::Running)?;
 
         let start = Instant::now();
@@ -139,7 +140,7 @@ impl TaskRunner for BackgroundRunner {
         ))
     }
 
-    async fn execute_async(&self, task: &mut Task) -> Result<TaskResult, TaskError> {
+    async fn execute_async(self: Box<Self>, mut task: Task) -> Result<TaskResult, TaskError> {
         task.transition_to(TaskState::Running)?;
 
         let start = Instant::now();

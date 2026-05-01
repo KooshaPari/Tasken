@@ -48,12 +48,8 @@ impl ScheduleKind {
             }
             ScheduleKind::Interval { every } => Some(from + Duration::seconds(*every)),
             ScheduleKind::Cron { expression } => {
-                // Simplified cron parsing
-                // In production, use the `cron` crate
-                cron_parser::next_run(expression, from)
-                    .ok()
-                    .map(|dt| DateTime::from_timestamp(dt, 0))
-                    .flatten()
+                // Use cron-parser crate to find next run
+                cron_parser::parse(expression, &from).ok()
             }
             ScheduleKind::Daily { at } => {
                 // Simplified daily parsing

@@ -1,6 +1,6 @@
 //! Workflow definitions and DAG orchestration.
 
-use super::TaskId;
+use super::tasks::TaskId;
 use chrono::{DateTime, Utc};
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
@@ -62,10 +62,11 @@ pub struct WorkflowStep {
 
 impl WorkflowStep {
     pub fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: name.clone(),  // Use name as id for easier testing
             task_id: None,
-            name: name.into(),
+            name,
             depends_on: Vec::new(),
             config: serde_json::Value::Null,
             timeout_seconds: None,
@@ -167,8 +168,13 @@ impl Workflow {
         }
 
         // Check for cycles
-        if let Some(cycle) = petgraph::algo::toposort(&self.dag, None) {
-            if cycle.len() != self.steps.len() {
+        match petgraph::algo::toposort(&self.dag, None) {
+            Ok(cycle) => {
+                if cycle.len() != self.steps.len() {
+                    return Err("Workflow contains cycles".to_string());
+                }
+            }
+            Err(_) => {
                 return Err("Workflow contains cycles".to_string());
             }
         }
@@ -177,12 +183,12 @@ impl Workflow {
     }
 
     /// Get execution order (topological sort).
-    pub fn execution_order(&self) -> Result<Vec<&WorkflowStep>, String> {
+    pub fn execution_order(&self) -> Result<Vec<WorkflowStep>, String> {
         let mut result = Vec::new();
         let mut visited = std::collections::HashSet::new();
 
         for step in &self.steps {
-            self.visit_step(step, &mut visited, &mut result)?;
+            self.visit_step(&step.id, &mut visited, &mut result)?;
         }
 
         Ok(result)
@@ -190,24 +196,26 @@ impl Workflow {
 
     fn visit_step(
         &self,
-        step: &WorkflowStep,
-        visited: &mut std::collections::HashSet<&str>,
-        result: &mut Vec<&WorkflowStep>,
+        step_id: &str,
+        visited: &mut std::collections::HashSet<String>,
+        result: &mut Vec<WorkflowStep>,
     ) -> Result<(), String> {
-        if visited.contains(step.id.as_str()) {
+        if visited.contains(step_id) {
             return Ok(());
         }
 
-        visited.insert(step.id.as_str());
+        visited.insert(step_id.to_string());
+
+        // Find the step
+        let step = self.steps.iter().find(|s| s.id == step_id)
+            .ok_or_else(|| format!("Step not found: {}", step_id))?;
 
         // Visit dependencies first
         for dep in &step.depends_on {
-            if let Some(dep_step) = self.steps.iter().find(|s| &s.id == dep) {
-                self.visit_step(dep_step, visited, result)?;
-            }
+            self.visit_step(dep, visited, result)?;
         }
 
-        result.push(step);
+        result.push(step.clone());
         Ok(())
     }
 
@@ -246,8 +254,8 @@ mod tests {
     #[test]
     fn test_execution_order() {
         let mut workflow = Workflow::new("test")
-            .with_step(WorkflowStep::new("step-1").with_dependency("step-0"))
-            .with_step(WorkflowStep::new("step-0"));
+            .with_step(WorkflowStep::new("step-0"))  // Add step-0 first
+            .with_step(WorkflowStep::new("step-1").with_dependency("step-0"));  // Then step-1 depends on step-0
 
         workflow.build_dag().unwrap();
         let order = workflow.execution_order().unwrap();
