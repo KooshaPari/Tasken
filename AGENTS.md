@@ -1,21 +1,13 @@
-# AGENTS.md — Tasken
+# Tasken — Claude Code Instructions
 
-This repository is part of the Phenotype ecosystem.
+## Project Overview
+- **Name**: Tasken
+- **Stack**: TBD
+- **Status**: Active development
 
-## Quick Links
+## AgilePlus Mandate
+All work MUST be tracked in AgilePlus.
+Reference: /Users/kooshapari/CodeProjects/Phenotype/repos/AgilePlus
 
-- **Project governance:** See `CLAUDE.md` in this repository
-- **Phenotype org guidance:** `/repos/CLAUDE.md`
-- **Global agent instructions:** `~/.claude/AGENTS.md`
-- **Work tracking:** AgilePlus at `/repos/AgilePlus`
-
-## Operating Model
-
-1. Before implementing: Check AgilePlus for existing specs
-2. Quality gates: See `CLAUDE.md` for build/test/lint commands
-3. Worktrees: Use `repos/Tasken-wtrees/<topic>/` for features
-4. Integration: Commit to `main` after gates pass
-
----
-
-**Parent contract:** See `CLAUDE.md` and `/repos/AGENTS.md` for complete governance.
+## References
+- Parent workspace: /Users/kooshapari/CodeProjects/Phenotype/repos/CLAUDE.md
