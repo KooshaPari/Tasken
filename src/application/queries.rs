@@ -2,7 +2,7 @@
 
 use super::super::domain::errors::TaskError;
 use super::super::domain::events::TaskEvent;
-use super::super::domain::{Task, TaskId, TaskState};
+use super::super::domain::tasks::{Task, TaskId, TaskState};
 use super::services::TaskService;
 
 /// Query to get a task by ID.
@@ -22,6 +22,7 @@ impl GetTask {
 }
 
 /// Query to list all tasks.
+#[derive(serde::Serialize)]
 pub struct ListTasks {
     pub state_filter: Option<TaskState>,
     pub tag_filter: Option<String>,

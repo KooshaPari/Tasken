@@ -12,13 +12,12 @@
 //! # Quick Start
 //!
 //! ```
-//! use taskkit::{Task, TaskRunner, SyncRunner};
+//! use taskkit::{Task, SyncRunner, TaskRunner};
 //!
-//! let task = Task::new("hello")
-//!     .with_action(|| println!("Hello!"));
-//!
+//! let mut task = Task::new("hello");
 //! let runner = SyncRunner::new();
-//! runner.execute(task).unwrap();
+//! let result = runner.execute(&mut task);
+//! assert!(result.is_ok());
 //! ```
 
 pub mod adapters;
@@ -30,8 +29,10 @@ pub mod infrastructure;
 pub use application::services::TaskService;
 pub use domain::errors::TaskError;
 pub use domain::{
-    RetryPolicy, Schedule, Scheduler, Task, TaskResult, TaskRunner, TaskState, Timeout, Workflow,
+    Schedule, Scheduler, Task, TaskResult, TaskRunner, TaskState, Workflow,
 };
+pub use domain::tasks::{Priority, RetryPolicy, TaskId};
+pub use domain::runners::{AsyncRunner, BackgroundRunner, SyncRunner};
 pub use infrastructure::error::TaskKitError;
 
 /// Framework version

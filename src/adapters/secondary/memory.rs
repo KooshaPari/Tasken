@@ -109,7 +109,7 @@ impl QueuePort for MemoryStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::TaskId;
+    use crate::domain::tasks::TaskId;
 
     #[tokio::test]
     async fn test_save_and_load_task() {

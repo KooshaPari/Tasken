@@ -1,10 +1,12 @@
 //! Task command definitions.
 
 use super::super::domain::errors::TaskError;
-use super::super::domain::{Priority, RetryPolicy, Task, TaskId, TaskState};
+use super::super::domain::tasks::{Priority, RetryPolicy, Task, TaskId};
 use super::services::TaskService;
+use serde::Serialize;
 
 /// Command to create a new task.
+#[derive(Serialize)]
 pub struct CreateTask {
     pub name: String,
     pub description: Option<String>,

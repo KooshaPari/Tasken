@@ -1,7 +1,7 @@
 //! CLI adapter for command-line interaction.
 
 use crate::application::{CreateTask, ListTasks};
-use crate::domain::{Priority, TaskState};
+use crate::domain::tasks::{Priority, TaskState};
 use clap::{Parser, Subcommand};
 
 /// CLI arguments.
@@ -66,9 +66,7 @@ pub enum Command {
 impl Cli {
     /// Parse the command line.
     pub fn parse() -> Self {
-        Self {
-            command: clap::Parser::parse(),
-        }
+        <Self as clap::Parser>::parse()
     }
 
     /// Convert priority string to enum.

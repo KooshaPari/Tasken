@@ -1,6 +1,7 @@
 //! Domain events for event sourcing.
 
-use super::{TaskId, TaskState};
+use super::tasks::TaskId;
+use super::tasks::TaskState;
 use chrono::{DateTime, Utc};
 
 /// A task-related event.
@@ -103,18 +104,18 @@ impl serde::Serialize for TaskEvent {
         S: serde::Serializer,
     {
         #[derive(serde::Serialize)]
-        struct EventEnvelope<'a> {
+        struct EventEnvelope {
             kind: &'static str,
-            task_id: &'a str,
+            task_id: String,
             #[serde(skip_serializing_if = "Option::is_none")]
-            from_state: Option<&'a str>,
+            from_state: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            to_state: Option<&'a str>,
+            to_state: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
-            error: Option<&'a str>,
+            error: Option<String>,
             #[serde(skip_serializing_if = "Option::is_none")]
             duration_ms: Option<u64>,
-            timestamp: &'a DateTime<Utc>,
+            timestamp: DateTime<Utc>,
         }
 
         let envelope = match self {
@@ -125,31 +126,31 @@ impl serde::Serialize for TaskEvent {
                 timestamp,
             } => EventEnvelope {
                 kind: "state_changed",
-                task_id: &task_id.0,
+                task_id: task_id.0.clone(),
                 from_state: Some(
                     format!("{:?}", from)
                         .to_lowercase()
                         .trim_start_matches("taskstate::")
-                        .into(),
+                        .to_string(),
                 ),
                 to_state: Some(
                     format!("{:?}", to)
                         .to_lowercase()
                         .trim_start_matches("taskstate::")
-                        .into(),
+                        .to_string(),
                 ),
                 error: None,
                 duration_ms: None,
-                timestamp,
+                timestamp: *timestamp,
             },
             TaskEvent::ExecutionStarted { task_id, timestamp } => EventEnvelope {
                 kind: "execution_started",
-                task_id: &task_id.0,
+                task_id: task_id.0.clone(),
                 from_state: None,
                 to_state: None,
                 error: None,
                 duration_ms: None,
-                timestamp,
+                timestamp: *timestamp,
             },
             TaskEvent::ExecutionCompleted {
                 task_id,
@@ -157,12 +158,12 @@ impl serde::Serialize for TaskEvent {
                 timestamp,
             } => EventEnvelope {
                 kind: "execution_completed",
-                task_id: &task_id.0,
+                task_id: task_id.0.clone(),
                 from_state: None,
                 to_state: None,
                 error: None,
                 duration_ms: Some(*duration_ms),
-                timestamp,
+                timestamp: *timestamp,
             },
             TaskEvent::ExecutionFailed {
                 task_id,
@@ -170,12 +171,12 @@ impl serde::Serialize for TaskEvent {
                 timestamp,
             } => EventEnvelope {
                 kind: "execution_failed",
-                task_id: &task_id.0,
+                task_id: task_id.0.clone(),
                 from_state: None,
                 to_state: None,
-                error: Some(error),
+                error: Some(error.clone()),
                 duration_ms: None,
-                timestamp,
+                timestamp: *timestamp,
             },
             TaskEvent::Scheduled {
                 task_id,
@@ -183,12 +184,12 @@ impl serde::Serialize for TaskEvent {
                 timestamp,
             } => EventEnvelope {
                 kind: "scheduled",
-                task_id: &task_id.0,
+                task_id: task_id.0.clone(),
                 from_state: None,
                 to_state: None,
                 error: None,
                 duration_ms: None,
-                timestamp,
+                timestamp: *timestamp,
             },
             TaskEvent::Retried {
                 task_id,
@@ -196,12 +197,12 @@ impl serde::Serialize for TaskEvent {
                 timestamp,
             } => EventEnvelope {
                 kind: "retried",
-                task_id: &task_id.0,
+                task_id: task_id.0.clone(),
                 from_state: None,
                 to_state: None,
                 error: None,
                 duration_ms: Some(*attempt as u64),
-                timestamp,
+                timestamp: *timestamp,
             },
             TaskEvent::Cancelled {
                 task_id,
@@ -209,12 +210,12 @@ impl serde::Serialize for TaskEvent {
                 timestamp,
             } => EventEnvelope {
                 kind: "cancelled",
-                task_id: &task_id.0,
+                task_id: task_id.0.clone(),
                 from_state: None,
                 to_state: None,
-                error: reason.as_deref(),
+                error: reason.clone(),
                 duration_ms: None,
-                timestamp,
+                timestamp: *timestamp,
             },
         };
 
