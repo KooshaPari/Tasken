@@ -1,15 +1,13 @@
 //! Task application service.
 
-use super::commands::{CancelTask, CreateTask, RetryTask};
-use super::queries::{GetTask, GetTaskHistory, ListTasks};
+use super::commands::CreateTask;
 use crate::domain::errors::TaskError;
 use crate::domain::{
     events::TaskEvent,
     ports::{QueuePort, StoragePort},
     TaskResult,
 };
-use crate::domain::tasks::{Priority, RetryPolicy, Task, TaskId, TaskState};
-use async_trait::async_trait;
+use crate::domain::tasks::{Task, TaskId, TaskState};
 use chrono::Utc;
 use std::sync::Arc;
 
@@ -102,7 +100,7 @@ impl TaskService {
     pub async fn cancel_task(
         &self,
         task_id: TaskId,
-        reason: Option<String>,
+        _reason: Option<String>,
     ) -> Result<(), TaskError> {
         let mut task = self
             .storage
@@ -162,7 +160,7 @@ impl TaskService {
 
     /// Execute a task.
     pub async fn execute_task(&self, task_id: &TaskId) -> Result<TaskResult, TaskError> {
-        let mut task = self
+        let task = self
             .storage
             .load_task(&task_id.0)
             .await

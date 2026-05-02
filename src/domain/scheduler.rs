@@ -51,7 +51,7 @@ impl ScheduleKind {
                 // Use cron-parser crate to find next run
                 cron_parser::parse(expression, &from).ok()
             }
-            ScheduleKind::Daily { at } => {
+            ScheduleKind::Daily { at: _ } => {
                 // Simplified daily parsing
                 Some(from + Duration::days(1))
             }

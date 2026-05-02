@@ -4,7 +4,6 @@ use super::tasks::TaskId;
 use chrono::{DateTime, Utc};
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Workflow identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
