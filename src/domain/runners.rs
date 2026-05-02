@@ -82,7 +82,7 @@ impl Default for AsyncRunner {
 
 #[async_trait]
 impl TaskRunner for AsyncRunner {
-    fn execute(&self, task: &mut Task) -> Result<TaskResult, TaskError> {
+    fn execute(&self, _task: &mut Task) -> Result<TaskResult, TaskError> {
         // Cannot execute async runner synchronously
         Err(TaskError::InvalidOperation(
             "AsyncRunner requires async execution".to_string(),

@@ -1,6 +1,5 @@
 //! In-memory storage adapter.
 
-use crate::domain::errors::TaskError;
 use crate::domain::{
     ports::{QueuePort, StoragePort},
     Schedule, Task, Workflow,

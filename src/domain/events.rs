@@ -180,7 +180,7 @@ impl serde::Serialize for TaskEvent {
             },
             TaskEvent::Scheduled {
                 task_id,
-                scheduled_for,
+                scheduled_for: _,
                 timestamp,
             } => EventEnvelope {
                 kind: "scheduled",

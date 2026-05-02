@@ -5,7 +5,6 @@ use super::events::TaskEvent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use uuid::Uuid;
 
 /// Unique task identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
