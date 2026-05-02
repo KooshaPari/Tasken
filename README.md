@@ -1,4 +1,5 @@
 > **Pinned references (Phenotype-org)**
+[![License](https://img.shields.io/github/license/KooshaPari/Tasken)](LICENSE)
 > - MSRV: see rust-toolchain.toml
 > - cargo-deny config: see deny.toml
 > - cargo-audit: rustsec/audit-check@v2 weekly
