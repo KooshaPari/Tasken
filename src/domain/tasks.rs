@@ -23,25 +23,21 @@ impl Default for TaskId {
 }
 
 /// Task priority levels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Priority {
     Low = 0,
+    #[default]
     Normal = 5,
     High = 8,
     Critical = 10,
 }
 
-impl Default for Priority {
-    fn default() -> Self {
-        Priority::Normal
-    }
-}
-
 /// Task state machine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskState {
+    #[default]
     Pending,
     Scheduled,
     Running,
@@ -49,12 +45,6 @@ pub enum TaskState {
     Failed,
     Cancelled,
     Retrying,
-}
-
-impl Default for TaskState {
-    fn default() -> Self {
-        TaskState::Pending
-    }
 }
 
 /// Retry policy for failed tasks.

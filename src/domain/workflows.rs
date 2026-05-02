@@ -22,9 +22,10 @@ impl Default for WorkflowId {
 }
 
 /// Workflow state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowState {
+    #[default]
     Draft,
     Pending,
     Running,
@@ -32,12 +33,6 @@ pub enum WorkflowState {
     Completed,
     Failed,
     Cancelled,
-}
-
-impl Default for WorkflowState {
-    fn default() -> Self {
-        WorkflowState::Draft
-    }
 }
 
 /// A single step in a workflow.

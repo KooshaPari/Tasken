@@ -53,7 +53,7 @@ impl TaskService {
         self.storage
             .save_task(&task)
             .await
-            .map_err(|e| TaskError::StorageError(e))?;
+            .map_err(TaskError::StorageError)?;
 
         Ok(task)
     }
@@ -63,7 +63,7 @@ impl TaskService {
         self.storage
             .load_task(&task_id.0)
             .await
-            .map_err(|e| TaskError::StorageError(e))
+            .map_err(TaskError::StorageError)
     }
 
     /// List tasks with optional filters.
@@ -77,7 +77,7 @@ impl TaskService {
             .storage
             .list_tasks()
             .await
-            .map_err(|e| TaskError::StorageError(e))?;
+            .map_err(TaskError::StorageError)?;
 
         // Apply filters
         if let Some(state) = state_filter {
@@ -106,7 +106,7 @@ impl TaskService {
             .storage
             .load_task(&task_id.0)
             .await
-            .map_err(|e| TaskError::StorageError(e))?
+            .map_err(TaskError::StorageError)?
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
         task.transition_to(TaskState::Cancelled)?;
@@ -114,7 +114,7 @@ impl TaskService {
         self.storage
             .save_task(&task)
             .await
-            .map_err(|e| TaskError::StorageError(e))?;
+            .map_err(TaskError::StorageError)?;
 
         Ok(())
     }
@@ -125,7 +125,7 @@ impl TaskService {
             .storage
             .load_task(&task_id.0)
             .await
-            .map_err(|e| TaskError::StorageError(e))?
+            .map_err(TaskError::StorageError)?
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
         if task.state != TaskState::Failed {
@@ -147,7 +147,7 @@ impl TaskService {
         self.storage
             .save_task(&task)
             .await
-            .map_err(|e| TaskError::StorageError(e))?;
+            .map_err(TaskError::StorageError)?;
 
         Ok(task)
     }
@@ -164,14 +164,14 @@ impl TaskService {
             .storage
             .load_task(&task_id.0)
             .await
-            .map_err(|e| TaskError::StorageError(e))?
+            .map_err(TaskError::StorageError)?
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
         // Execute using the queue
         self.queue
             .enqueue(task.clone())
             .await
-            .map_err(|e| TaskError::StorageError(e))?;
+            .map_err(TaskError::StorageError)?;
 
         // In a real implementation, the queue worker would execute and store the result
         Ok(task.success_result(
