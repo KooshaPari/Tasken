@@ -17,22 +17,22 @@ jobs:
     name: Run Benchmarks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
       - name: Cache cargo registry
-        uses: Swatinem/rust-cache@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: Swatinem/rust-cache@v2
 
       - name: Run benchmarks
         run: |
           cargo bench --all-features 2>&1 | tee benchmark.log
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: actions/upload-artifact@6f8efc29b200d32929f49075959781ed54ec270c
         with:
           name: benchmark-results
           path: benchmark.log
@@ -40,7 +40,7 @@ jobs:
 
       - name: Compare benchmarks
         if: github.event_name == 'pull_request'
-        uses: benchmark-action/github-action-benchmark@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: 'cargo'
           output-file-path: benchmark.log

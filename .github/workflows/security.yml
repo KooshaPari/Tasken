@@ -24,12 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
         with:
           fetch-depth: 0
 
       - name: Secrets scan (trufflehog)
-        uses: trufflesecurity/trufflehog@3fc0c2aa6648d54242e4af6fbfde0701796e4fb0  # was: @{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
+        uses: trufflesecurity/trufflehog@3fc0c2aa6648d54242e4af6fbfde0701796e4fb0  # was: @main
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
@@ -42,17 +42,17 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
 
       
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Run Clippy Security Lints
         run: cargo clippy -- -D warnings -W clippy::panic -W clippy::unwrap_used
 
       - name: Run Cargo Audit
-        uses: actions-rust-lang/audit@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: actions-rust-lang/audit@v1
         with:
           file: Cargo.lock
 
@@ -64,11 +64,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
 
       
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Run Cargo Audit
         run: |
@@ -84,20 +84,20 @@ jobs:
     if: ${{ hashFiles('Dockerfile') != '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
 
       - name: Build image
         run: docker build -t ${{ github.event.repository.name }}:scan .
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # was: @{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # was: @master
         with:
           image-ref: '${{ github.event.repository.name }}:scan'
           format: 'sarif'
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
