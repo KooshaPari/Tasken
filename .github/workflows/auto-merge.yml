@@ -11,10 +11,10 @@ jobs:
     if: github.actor == 'dependabot[bot]' || github.actor == 'pre-commit-ci[bot]'
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/repos#get-a-repository","status":"404"}
       
       - name: Auto-merge
-        uses: actions/github-script@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/github-script@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#get-a-commit","status":"404"}
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
