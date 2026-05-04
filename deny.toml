@@ -26,7 +26,4 @@ allow = [
 unknown-git = "deny"
 
 [advisories]
-ignore = [
-    # No safe upgrade available - async-nats 0.46.0 still uses rustls-webpki 0.102.x
-    { id = "RUSTSEC-2026-0049", reason = "No safe upgrade available. async-nats 0.46.0 still uses vulnerable rustls-webpki." },
-]
+ignore = []
