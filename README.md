@@ -1,3 +1,6 @@
+> **Work state:** ACTIVE · **Progress:** `█████░░░░░ 45%`
+> Rust task engine; scaffold-to-active, governance complete · updated 2026-06-02
+
 > **Pinned references (Phenotype-org)**
 > - MSRV: see rust-toolchain.toml
 > - cargo-deny config: see deny.toml
