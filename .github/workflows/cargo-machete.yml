@@ -12,4 +12,4 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout # v4.1.1
-      - uses: bnjbvr/cargo-machete@main
+      - uses: bnjbvr/cargo-machete@fbb3fa79e64f5c1b1c0ce8e2cd4b65eef5d76c70

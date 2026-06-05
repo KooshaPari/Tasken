@@ -47,7 +47,7 @@ jobs:
         with:
           tool: 'cargo'
           output-file-path: benchmark.log
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
           auto-push: false
           alert-threshold: '150%'
           comment-on-alert: true

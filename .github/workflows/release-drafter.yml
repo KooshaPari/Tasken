@@ -9,9 +9,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release-drafter:
-    uses: KooshaPari/phenoShared/.github/workflows/reusable-release-drafter.yml@main
+    uses: KooshaPari/phenoShared/.github/workflows/reusable-release-drafter.yml@72b9c6cbdb24c49189b0e7c7395d874830d1ed87
     with:
       config-name: release-drafter.yml
     permissions:
