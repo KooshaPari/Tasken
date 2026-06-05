@@ -1,6 +1,13 @@
 name: CodeQL (Rust)
 
 on:
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
   push:
     branches: [main]
   pull_request:

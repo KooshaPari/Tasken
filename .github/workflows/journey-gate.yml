@@ -21,6 +21,10 @@ permissions:
 #   - PASSES only when all manifests pass validation AND all assertions pass.
 # =============================================================================
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 name: Journey Gate
 
 on:

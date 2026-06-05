@@ -7,6 +7,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   trufflehog:
     runs-on: ubuntu-24.04
@@ -17,4 +21,4 @@ jobs:
       - uses: trufflehog/actions/setup@17456cf5a9c8be7821b4dc568702b5f43650a8ad  # was: @main
       - run: trufflehog github --only-verified --no-update
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: \${{ github.token }}
