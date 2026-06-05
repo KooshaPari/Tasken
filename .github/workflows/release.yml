@@ -18,7 +18,7 @@ jobs:
     outputs:
       version: $123steps.version.outputs.version125
     steps:
-      - uses: actions/checkout # v4.1.1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
         with:
           fetch-depth: 0
 
@@ -47,10 +47,10 @@ jobs:
     needs: release
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout # v4.1.1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
 
       - name: Promote to staging
-        uses: KooshaPari/phenotypeActions/promote@main
+        uses: KooshaPari/phenotypeActions/promote@48772d7560c964fff01a209742429f24283e96cf  # was: @main
         with:
           version: $123needs.release.outputs.version125
           channel: beta
