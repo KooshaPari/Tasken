@@ -22,13 +22,13 @@ jobs:
         rust-version: ['1.70', 'stable']
     
     steps:
-      - uses: actions/checkout # v4.1.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
 
       
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # was: @master
         with:
-          toolchain: $123matrix.rust-version125
+          toolchain: ${{ matrix.rust-version }}
 
       - name: Build
         run: cargo build --verbose
