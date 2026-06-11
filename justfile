@@ -1,29 +1,16 @@
-# Phenotype-org standard justfile
+# Tasken Justfile
+#
+# After 2026-06-11, this justfile is a thin shell that re-exports the shared
+# `phenotype.just` library (defined in just/phenotype.just). The 9 most
+# common recipes (default, build, test, lint, fmt, audit, unused, ci, docs)
+# are now defined once in the library and parameterized over the build
+# system.
+#
+# Stack-specific recipes (e.g. `clean`, `dev`) stay in this file.
+#
+# To upgrade: pull the latest phenotype.just from the central repo, or
+# vendor it as a git submodule.
 
-default:
-    @just --list
+import "just/phenotype.just"
 
-build:
-    cargo build --workspace
 
-test:
-    cargo test --workspace
-
-lint:
-    cargo clippy --workspace -- -D warnings
-    cargo fmt --check
-
-fmt:
-    cargo fmt
-
-audit:
-    cargo deny check
-    cargo audit
-
-unused:
-    cargo machete
-
-ci: lint test audit unused
-
-docs:
-    cargo doc --no-deps --workspace
