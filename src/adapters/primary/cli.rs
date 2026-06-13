@@ -1,8 +1,11 @@
 //! CLI adapter for command-line interaction.
 
-use crate::application::{CreateTask, ListTasks};
-use crate::domain::tasks::{Priority, TaskState};
+use crate::application::{CreateTask, ListTasks, TaskService};
+use crate::domain::errors::TaskError;
+use crate::domain::tasks::{Priority, TaskId, TaskState};
+use crate::domain::workflows::{Workflow, WorkflowStep};
 use clap::{Parser, Subcommand};
+use std::sync::Arc;
 
 /// CLI arguments.
 #[derive(Parser, Debug)]
@@ -28,11 +31,14 @@ pub enum Command {
         #[arg(short, long, default_value = "normal")]
         priority: String,
         /// Timeout in seconds.
-        #[arg(short, long)]
+        #[arg(short = 'T', long)]
         timeout: Option<u64>,
         /// Tags (can be specified multiple times).
         #[arg(short, long)]
         tag: Vec<String>,
+        /// Shell command to execute.
+        #[arg(short, long)]
+        command: Option<String>,
     },
     /// List tasks.
     List {
@@ -60,6 +66,57 @@ pub enum Command {
         /// Cancellation reason.
         #[arg(short, long)]
         reason: Option<String>,
+    },
+    /// Run a task by ID (shell execution).
+    Run {
+        /// Task ID.
+        #[arg(short, long)]
+        id: String,
+    },
+    /// Workflow commands.
+    Workflow {
+        #[command(subcommand)]
+        command: WorkflowCommand,
+    },
+}
+
+/// Workflow subcommands.
+#[derive(Subcommand, Debug)]
+pub enum WorkflowCommand {
+    /// Create a new workflow.
+    Create {
+        /// Workflow name.
+        #[arg(short, long)]
+        name: String,
+    },
+    /// List workflows.
+    List,
+    /// Get a workflow by ID.
+    Get {
+        /// Workflow ID.
+        #[arg(short, long)]
+        id: String,
+    },
+    /// Add a step to a workflow.
+    AddStep {
+        /// Workflow ID.
+        #[arg(short, long)]
+        workflow_id: String,
+        /// Step name.
+        #[arg(short, long)]
+        name: String,
+        /// Task ID to execute.
+        #[arg(short, long)]
+        task_id: String,
+        /// Dependencies (step names).
+        #[arg(short, long)]
+        depends_on: Vec<String>,
+    },
+    /// Run a workflow.
+    Run {
+        /// Workflow ID.
+        #[arg(short, long)]
+        id: String,
     },
 }
 
@@ -98,9 +155,16 @@ pub struct CliAdapter;
 
 impl CliAdapter {
     /// Run the CLI.
-    pub fn run() {
+    pub async fn run(service: Arc<TaskService>) {
         let cli = Cli::parse();
 
+        if let Err(e) = Self::handle_command(cli, service).await {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    }
+
+    async fn handle_command(cli: Cli, service: Arc<TaskService>) -> Result<(), TaskError> {
         match cli.command {
             Command::Create {
                 name,
@@ -108,10 +172,9 @@ impl CliAdapter {
                 priority,
                 timeout,
                 tag,
+                command,
             } => {
-                println!("Creating task: {}", name);
                 let priority = Cli::parse_priority(&priority);
-                let _timeout = timeout.map(std::time::Duration::from_secs);
 
                 let mut cmd = CreateTask::new(name);
                 if let Some(desc) = description {
@@ -124,14 +187,14 @@ impl CliAdapter {
                 for t in tag {
                     cmd = cmd.with_tag(t);
                 }
+                if let Some(c) = command {
+                    cmd = cmd.with_command(c);
+                }
 
-                println!(
-                    "Task created: {:?}",
-                    serde_json::to_string_pretty(&cmd).unwrap()
-                );
+                let task = cmd.execute(&*service).await?;
+                println!("{}", serde_json::to_string_pretty(&task).unwrap());
             }
             Command::List { state, tag, limit } => {
-                println!("Listing tasks (limit: {})", limit);
                 let state_filter = state.and_then(|s| Cli::parse_state(&s));
                 let query = ListTasks::new().with_limit(limit);
                 let query = match (state_filter, tag) {
@@ -140,18 +203,86 @@ impl CliAdapter {
                     (None, Some(t)) => query.with_tag(t),
                     (None, None) => query,
                 };
-                println!("Query: {:?}", serde_json::to_string_pretty(&query).unwrap());
+                let tasks = query.execute(&*service).await?;
+                println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
             }
             Command::Get { id } => {
-                println!("Getting task: {}", id);
-            }
-            Command::Cancel { id, reason } => {
-                println!("Cancelling task: {}", id);
-                if let Some(r) = reason {
-                    println!("Reason: {}", r);
+                let task = service.get_task(&TaskId::from_string(id.clone())).await?;
+                match task {
+                    Some(t) => println!("{}", serde_json::to_string_pretty(&t).unwrap()),
+                    None => return Err(TaskError::NotFound(id)),
                 }
             }
+            Command::Cancel { id, reason } => {
+                let task_id = TaskId::from_string(id);
+                service.cancel_task(task_id, reason).await?;
+                println!("Task cancelled");
+            }
+            Command::Run { id } => {
+                let task_id = TaskId::from_string(id);
+                let result = service.run_task(&task_id).await?;
+                println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                if !result.success {
+                    std::process::exit(1);
+                }
+            }
+            Command::Workflow { command } => {
+                Self::handle_workflow_command(command, service).await?;
+            }
         }
+        Ok(())
+    }
+
+    async fn handle_workflow_command(
+        command: WorkflowCommand,
+        service: Arc<TaskService>,
+    ) -> Result<(), TaskError> {
+        match command {
+            WorkflowCommand::Create { name } => {
+                let workflow = Workflow::new(name);
+                let created = service.create_workflow(workflow).await?;
+                println!("{}", serde_json::to_string_pretty(&created).unwrap());
+            }
+            WorkflowCommand::List => {
+                let workflows = service.list_workflows().await?;
+                println!("{}", serde_json::to_string_pretty(&workflows).unwrap());
+            }
+            WorkflowCommand::Get { id } => {
+                use crate::domain::workflows::WorkflowId;
+                let workflow = service.get_workflow(&WorkflowId::from_string(id.clone())).await?;
+                match workflow {
+                    Some(w) => println!("{}", serde_json::to_string_pretty(&w).unwrap()),
+                    None => return Err(TaskError::NotFound(id)),
+                }
+            }
+            WorkflowCommand::AddStep {
+                workflow_id,
+                name,
+                task_id,
+                depends_on,
+            } => {
+                use crate::domain::workflows::WorkflowId;
+                let w_id = WorkflowId::from_string(workflow_id);
+                let mut workflow = service
+                    .get_workflow(&w_id)
+                    .await?
+                    .ok_or_else(|| TaskError::NotFound(w_id.0.clone()))?;
+                let mut step = WorkflowStep::new(name).with_task(TaskId::from_string(task_id));
+                for dep in depends_on {
+                    step = step.with_dependency(dep);
+                }
+                workflow = workflow.with_step(step);
+                let updated = service.create_workflow(workflow).await?;
+                println!("{}", serde_json::to_string_pretty(&updated).unwrap());
+            }
+            WorkflowCommand::Run { id } => {
+                use crate::domain::workflows::WorkflowId;
+                let w_id = WorkflowId::from_string(id);
+                let results = service.execute_workflow(&w_id).await?;
+                println!("{}", serde_json::to_string_pretty(&results).unwrap());
+            }
+        }
+        Ok(())
     }
 }
 

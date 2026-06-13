@@ -14,6 +14,10 @@ impl TaskId {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
+
+    pub fn from_string(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
 }
 
 impl Default for TaskId {
@@ -162,6 +166,12 @@ impl Task {
     /// Set the payload data.
     pub fn with_data(mut self, data: serde_json::Value) -> Self {
         self.data = data;
+        self
+    }
+
+    /// Set a shell command as the task payload.
+    pub fn with_command(mut self, command: impl Into<String>) -> Self {
+        self.data = serde_json::json!({"command": command.into()});
         self
     }
 
@@ -316,5 +326,79 @@ mod tests {
     fn test_retry_policy() {
         let policy = RetryPolicy::default();
         assert_eq!(policy.max_attempts, 3);
+    }
+
+    #[test]
+    fn test_can_retry() {
+        let mut task = Task::new("retry-test").with_retry_policy(RetryPolicy::default());
+        assert!(task.can_retry());
+        task.retry_count = 3;
+        assert!(!task.can_retry());
+    }
+
+    #[test]
+    fn test_can_retry_no_policy() {
+        let task = Task::new("no-retry");
+        assert!(!task.can_retry());
+    }
+
+    #[test]
+    fn test_retry_delay() {
+        let mut task = Task::new("delay-test").with_retry_policy(RetryPolicy::default());
+        assert_eq!(task.retry_delay(), Duration::from_secs(1));
+        task.retry_count = 1;
+        assert_eq!(task.retry_delay(), Duration::from_secs(2));
+        task.retry_count = 2;
+        assert_eq!(task.retry_delay(), Duration::from_secs(4));
+    }
+
+    #[test]
+    fn test_retry_delay_max_cap() {
+        let mut task = Task::new("delay-cap").with_retry_policy(RetryPolicy {
+            max_attempts: 10,
+            base_delay: Duration::from_secs(30),
+            max_delay: Duration::from_secs(60),
+            jitter: 0.0,
+        });
+        task.retry_count = 5;
+        // 30 * 2^5 = 960, but capped at 60
+        assert_eq!(task.retry_delay(), Duration::from_secs(60));
+    }
+
+    #[test]
+    fn test_with_command() {
+        let task = Task::new("cmd-test").with_command("echo hello");
+        assert_eq!(task.data, serde_json::json!({"command": "echo hello"}));
+    }
+
+    #[test]
+    fn test_with_tag() {
+        let task = Task::new("tag-test").with_tag("dev").with_tag("rust");
+        assert_eq!(task.tags, vec!["dev", "rust"]);
+    }
+
+    #[test]
+    fn test_success_result() {
+        let task = Task::new("result-test");
+        let result = task.success_result(serde_json::json!({"status": "ok"}), Duration::from_secs(1));
+        assert!(result.success);
+        assert_eq!(result.task_id, task.id);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_failure_result() {
+        let task = Task::new("result-test");
+        let result = task.failure_result("it broke".to_string(), Duration::from_secs(1));
+        assert!(!result.success);
+        assert_eq!(result.error, Some("it broke".to_string()));
+    }
+
+    #[test]
+    fn test_terminal_state_no_transition() {
+        let mut task = Task::new("terminal");
+        task.transition_to(TaskState::Running).unwrap();
+        task.transition_to(TaskState::Completed).unwrap();
+        assert!(task.transition_to(TaskState::Failed).is_err());
     }
 }

@@ -189,4 +189,76 @@ mod tests {
         schedule.tick();
         assert!(schedule.last_run.is_some());
     }
+
+    #[test]
+    fn test_cron_schedule_next_run() {
+        let now = Utc::now();
+        let kind = ScheduleKind::Cron {
+            expression: "0 0 * * *".to_string(),
+        };
+        let next = kind.next_run(now);
+        assert!(next.is_some());
+        assert!(next.unwrap() > now);
+    }
+
+    #[test]
+    fn test_daily_schedule_next_run() {
+        let now = Utc::now();
+        let kind = ScheduleKind::Daily {
+            at: "09:00".to_string(),
+        };
+        let next = kind.next_run(now);
+        assert!(next.is_some());
+        assert!(next.unwrap() > now);
+    }
+
+    #[test]
+    fn test_weekly_schedule_next_run() {
+        let now = Utc::now();
+        let kind = ScheduleKind::Weekly {
+            days: vec!["mon".to_string()],
+            at: "09:00".to_string(),
+        };
+        let next = kind.next_run(now);
+        assert!(next.is_some());
+        assert!(next.unwrap() > now);
+    }
+
+    #[test]
+    fn test_interval_next_run() {
+        let now = Utc::now();
+        let kind = ScheduleKind::Interval { every: 300 };
+        let next = kind.next_run(now);
+        assert_eq!(next, Some(now + Duration::seconds(300)));
+    }
+
+    #[test]
+    fn test_once_past_next_run() {
+        let past = Utc::now() - Duration::hours(1);
+        let kind = ScheduleKind::Once { at: past };
+        let next = kind.next_run(Utc::now());
+        assert!(next.is_none());
+    }
+
+    #[test]
+    fn test_pause_and_resume() {
+        let mut schedule = Schedule::interval("task-1", 3600);
+        assert!(schedule.active);
+
+        schedule.pause();
+        assert!(!schedule.active);
+
+        schedule.resume();
+        assert!(schedule.active);
+    }
+
+    #[test]
+    fn test_interval_tick() {
+        let mut schedule = Schedule::interval("task-1", 3600);
+        let first_next = schedule.next_run.unwrap();
+
+        schedule.tick();
+        let second_next = schedule.next_run.unwrap();
+        assert_eq!(second_next - first_next, Duration::seconds(3600));
+    }
 }

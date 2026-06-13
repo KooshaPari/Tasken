@@ -17,6 +17,7 @@ pub mod workflows;
 
 // Re-exports
 pub use errors::TaskError;
+pub use errors::PortError;
 pub use events::{TaskEvent, TaskEventKind};
 pub use ports::{NotificationPort, QueuePort, StoragePort, TaskPort};
 pub use runners::{AsyncRunner, BackgroundRunner, SyncRunner, TaskRunner};

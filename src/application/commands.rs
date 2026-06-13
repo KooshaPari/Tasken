@@ -60,6 +60,11 @@ impl CreateTask {
         self
     }
 
+    pub fn with_command(mut self, command: impl Into<String>) -> Self {
+        self.data = serde_json::json!({"command": command.into()});
+        self
+    }
+
     /// Execute the command.
     pub async fn execute(self, service: &TaskService) -> Result<Task, TaskError> {
         service.create_task(self).await

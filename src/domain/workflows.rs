@@ -13,6 +13,10 @@ impl WorkflowId {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
+
+    pub fn from_string(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
 }
 
 impl Default for WorkflowId {
