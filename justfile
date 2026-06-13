@@ -13,4 +13,22 @@
 
 import "just/phenotype.just"
 
+# Explicit recipe aliases for the required targets
+# These are thin wrappers around the shared phenotype.just recipes.
+
+check:
+    @just typecheck
+
+clippy:
+    @if [ "{{build_system}}" = "cargo" ]; then cargo clippy --workspace --all-targets -- -D warnings; \
+    else echo "no clippy for {{build_system}}"; fi
+
+deny:
+    @if [ "{{build_system}}" = "cargo" ]; then \
+        (command -v cargo-deny >/dev/null && cargo deny check || echo "cargo-deny not installed; skip"); \
+    else echo "no deny for {{build_system}}"; fi
+
+doc:
+    @just docs
+
 

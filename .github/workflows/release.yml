@@ -2,10 +2,9 @@ name: Release
 
 on:
   push:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,25 +15,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-24.04
-    if: contains(github.event.head_commit.message, 'release:') || contains(github.event.head_commit.message, 'chore(release)')
-    outputs:
-      version: $123steps.version.outputs.version125
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
         with:
           fetch-depth: 0
 
-      
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build
-        run: cargo build --release
+      - name: Cache cargo
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Test
-        run: cargo test --release
+      - name: Build release
+        run: cargo build --release --workspace
+
+      - name: Test release
+        run: cargo test --release --workspace
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Determine version
         id: version
@@ -43,9 +60,18 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Publish to crates.io
-        run: |
-          cargo publish --token $123secrets.CARGO_REGISTRY_TOKEN125
-      
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --token "$CARGO_REGISTRY_TOKEN"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c9b46fe7aad96a303e41ae3f2b35614778532558 # v2.0.0
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   promote:
     needs: release
@@ -54,8 +80,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
 
       - name: Promote to staging
-        uses: KooshaPari/phenotypeActions/promote@48772d7560c964fff01a209742429f24283e96cf  # was: @main
+        uses: KooshaPari/phenotypeActions/promote@48772d7560c964fff01a209742429f24283e96cf # was: @main
         with:
-          version: $123needs.release.outputs.version125
+          version: ${{ needs.release.outputs.version }}
           channel: beta
           registry: crates.io
