@@ -1,6 +1,8 @@
 //! CLI adapter for command-line interaction.
 
-use crate::application::{CreateTask, ListTasks, TaskService};
+use crate::application::{
+    compose_command, CreateTask, ForwardedArgs, ListTasks, TaskService,
+};
 use crate::domain::errors::TaskError;
 use crate::domain::tasks::{Priority, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowStep};
@@ -72,6 +74,50 @@ pub enum Command {
         /// Task ID.
         #[arg(short, long)]
         id: String,
+    },
+    /// Run a task with raw arguments forwarded after `--`.
+    ///
+    /// This is a SOTA-style "args passthrough" command: anything after
+    /// the literal `--` separator is captured as forwarded arguments
+    /// and appended to the task's command. This avoids flag collisions
+    /// with the tasken's own flags.
+    ///
+    /// Example:
+    ///   taskkit run-args --id build -- --release --target=x86_64
+    RunArgs {
+        /// Task ID.
+        #[arg(short, long)]
+        id: String,
+        /// Raw arguments forwarded to the task. Everything after `--`
+        /// is captured as-is; hyphen-prefixed values are preserved.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Create a task from a raw command line. Anything after `--` is
+    /// appended verbatim to the command.
+    CreateRaw {
+        /// Task name.
+        #[arg(short, long)]
+        name: String,
+        /// Optional task description.
+        #[arg(short, long)]
+        description: Option<String>,
+        /// Priority level (low, normal, high, critical).
+        #[arg(short, long, default_value = "normal")]
+        priority: String,
+        /// Timeout in seconds.
+        #[arg(short = 'T', long)]
+        timeout: Option<u64>,
+        /// Tags (can be specified multiple times).
+        #[arg(short, long)]
+        tag: Vec<String>,
+        /// Base command (executable + its own arguments). When `--` is
+        /// present, forwarded args are appended after shell-quoting.
+        #[arg(short, long)]
+        command: Option<String>,
+        /// Forwarded args (after `--`). Hyphenated values are preserved.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
     /// Workflow commands.
     Workflow {
@@ -225,6 +271,54 @@ impl CliAdapter {
                 if !result.success {
                     std::process::exit(1);
                 }
+            }
+            Command::RunArgs { id, args } => {
+                // Argument forwarding: append shell-quoted args to the
+                // existing task command and execute as a one-off run.
+                let task_id = TaskId::from_string(id);
+                let mut task = service
+                    .get_task(&task_id)
+                    .await?
+                    .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
+                let forwarded = ForwardedArgs::from_slice(&args);
+                let base = task
+                    .data
+                    .get("command")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let composed = compose_command(&base, &forwarded);
+                task.data = serde_json::json!({"command": composed});
+                crate::domain::run_with_streams(&mut task, true)?;
+            }
+            Command::CreateRaw {
+                name,
+                description,
+                priority,
+                timeout,
+                tag,
+                command,
+                args,
+            } => {
+                let priority = Cli::parse_priority(&priority);
+                let forwarded = ForwardedArgs::from_slice(&args);
+                let composed = match command {
+                    Some(base) => compose_command(&base, &forwarded),
+                    None => forwarded.shell_quote(),
+                };
+                let mut cmd = CreateTask::new(name).with_command(composed);
+                if let Some(desc) = description {
+                    cmd = cmd.with_description(desc);
+                }
+                cmd = cmd.with_priority(priority);
+                if let Some(t) = timeout {
+                    cmd = cmd.with_timeout(t);
+                }
+                for tg in tag {
+                    cmd = cmd.with_tag(tg);
+                }
+                let task = cmd.execute(&*service).await?;
+                println!("{}", serde_json::to_string_pretty(&task).unwrap());
             }
             Command::Workflow { command } => {
                 Self::handle_workflow_command(command, service).await?;
