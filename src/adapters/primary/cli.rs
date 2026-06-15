@@ -266,7 +266,7 @@ impl CliAdapter {
                 let task = service.get_task(&TaskId::from_string(id.clone())).await?;
                 match task {
                     Some(t) => println!("{}", serde_json::to_string_pretty(&t).unwrap()),
-                    None => return Err(TaskError::NotFound(id)),
+                    None => return Err(TaskError::NotFound(id).into()),
                 }
             }
             Command::Cancel { id, reason } => {
