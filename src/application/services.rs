@@ -11,15 +11,30 @@ use chrono::Utc;
 use std::sync::Arc;
 
 /// Task application service.
+#[derive(Clone)]
 pub struct TaskService {
     storage: Arc<dyn StoragePort>,
     queue: Arc<dyn QueuePort>,
+    cache: crate::infrastructure::TaskCache,
 }
 
 impl TaskService {
     /// Create a new task service.
     pub fn new(storage: Arc<dyn StoragePort>, queue: Arc<dyn QueuePort>) -> Self {
-        Self { storage, queue }
+        Self {
+            storage,
+            queue,
+            cache: crate::infrastructure::TaskCache::default(),
+        }
+    }
+
+    /// Create a new task service with a custom cache.
+    pub fn with_cache(
+        storage: Arc<dyn StoragePort>,
+        queue: Arc<dyn QueuePort>,
+        cache: crate::infrastructure::TaskCache,
+    ) -> Self {
+        Self { storage, queue, cache }
     }
 
     /// Create a new task.
@@ -157,8 +172,13 @@ impl TaskService {
         ))
     }
 
-    /// Run a task synchronously using the shell runner.
+    /// Run a task synchronously using the shell runner with cache support.
     pub async fn run_task(&self, task_id: &TaskId) -> Result<TaskResult, TaskError> {
+        // Check cache first
+        if let Some(cached) = self.cache.get(task_id) {
+            return Ok(cached);
+        }
+
         let mut task = self
             .storage
             .load_task(&task_id.0)
@@ -170,6 +190,11 @@ impl TaskService {
 
         // Save updated task state back to storage
         self.storage.save_task(&task).await?;
+
+        // Cache successful results
+        if result.success {
+            self.cache.insert(task_id.clone(), result.clone());
+        }
 
         Ok(result)
     }
@@ -347,6 +372,39 @@ mod tests {
         let found = service.get_workflow(&created.id).await.unwrap();
         assert!(found.is_some());
         assert_eq!(found.unwrap().name, "test-workflow");
+    }
+
+    #[tokio::test]
+    async fn test_run_task_caches_successful_results() {
+        let service = setup_service();
+        let cmd = CreateTask::new("cache-test").with_command("echo cached");
+        let task = service.create_task(cmd).await.unwrap();
+
+        // First run should execute
+        let result1 = service.run_task(&task.id).await.unwrap();
+        assert!(result1.success);
+
+        // Second run should return cached result
+        let result2 = service.run_task(&task.id).await.unwrap();
+        assert!(result2.success);
+        // Should be the same result (cached)
+        assert_eq!(result1.timestamp, result2.timestamp);
+    }
+
+    #[tokio::test]
+    async fn test_run_task_failure_not_cached() {
+        let service = setup_service();
+        let cmd = CreateTask::new("fail-cache").with_command("false");
+        let task = service.create_task(cmd).await.unwrap();
+
+        let result1 = service.run_task(&task.id).await.unwrap();
+        assert!(!result1.success);
+
+        // Failure should not be cached
+        let result2 = service.run_task(&task.id).await.unwrap();
+        assert!(!result2.success);
+        // Timestamps should differ since it re-ran
+        assert_ne!(result1.timestamp, result2.timestamp);
     }
 
     #[tokio::test]
