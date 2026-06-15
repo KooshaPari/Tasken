@@ -7,6 +7,7 @@
 //! - **Services**: Domain services for task orchestration
 //! - **Errors**: Domain-specific error types
 
+pub mod dag;
 pub mod errors;
 pub mod events;
 pub mod ports;
@@ -17,6 +18,7 @@ pub mod tasks;
 pub mod workflows;
 
 // Re-exports
+pub use dag::{DagError, ExecutionDag};
 pub use errors::TaskError;
 pub use errors::PortError;
 pub use events::{TaskEvent, TaskEventKind};
@@ -26,3 +28,4 @@ pub use scheduler::{Schedule, ScheduleKind, Scheduler};
 pub use stream_runner::{run_with_streams, StreamResult, StreamRunner};
 pub use tasks::{Task, TaskResult, TaskState};
 pub use workflows::{Workflow, WorkflowState, WorkflowStep};
+

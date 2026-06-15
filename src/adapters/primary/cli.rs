@@ -398,4 +398,112 @@ mod tests {
         assert_eq!(Cli::parse_state("running"), Some(TaskState::Running));
         assert_eq!(Cli::parse_state("unknown"), None);
     }
+
+    #[test]
+    fn test_cli_parses_create_raw_with_forwarded_args() {
+        // The forwarded args use `trailing_var_arg` and `allow_hyphen_values`
+        // so `--release`, `--target=x86_64` after the `--` separator
+        // are preserved verbatim.
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "create-raw",
+            "--name",
+            "build",
+            "--priority",
+            "high",
+            "--command",
+            "cargo build",
+            "--",
+            "--release",
+            "--target=x86_64",
+            "--features",
+            "tokio,serde",
+        ])
+        .expect("parse should succeed");
+
+        match cli.command {
+            Command::CreateRaw {
+                name,
+                priority,
+                command,
+                args,
+                ..
+            } => {
+                assert_eq!(name, "build");
+                assert_eq!(priority, "high");
+                assert_eq!(command.as_deref(), Some("cargo build"));
+                assert_eq!(
+                    args,
+                    vec![
+                        "--release".to_string(),
+                        "--target=x86_64".to_string(),
+                        "--features".to_string(),
+                        "tokio,serde".to_string(),
+                    ]
+                );
+            }
+            other => panic!("expected CreateRaw, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parses_run_args_with_forwarded() {
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "run-args",
+            "--id",
+            "abc-123",
+            "--",
+            "--release",
+            "--",
+            "nested-arg",
+        ])
+        .expect("parse should succeed");
+
+        match cli.command {
+            Command::RunArgs { id, args } => {
+                assert_eq!(id, "abc-123");
+                // The `--` separator inside forwarded args is preserved
+                // as a literal string.
+                assert_eq!(
+                    args,
+                    vec![
+                        "--release".to_string(),
+                        "--".to_string(),
+                        "nested-arg".to_string()
+                    ]
+                );
+            }
+            other => panic!("expected RunArgs, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_create_raw_without_command() {
+        // When --command is omitted, all forwarded args are the command
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "create-raw",
+            "--name",
+            "echo-task",
+            "--",
+            "echo",
+            "hello world",
+        ])
+        .expect("parse should succeed");
+        match cli.command {
+            Command::CreateRaw { command, args, .. } => {
+                assert!(command.is_none());
+                assert_eq!(args, vec!["echo".to_string(), "hello world".to_string()]);
+            }
+            other => panic!("expected CreateRaw, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_rejects_missing_required_name() {
+        // Missing --name for create-raw should fail
+        let res = Cli::try_parse_from(["taskkit", "create-raw", "--", "echo"]);
+        assert!(res.is_err());
+    }
 }

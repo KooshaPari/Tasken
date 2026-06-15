@@ -33,7 +33,10 @@ pub use domain::{
 };
 pub use domain::tasks::{Priority, RetryPolicy, TaskId};
 pub use domain::runners::{AsyncRunner, BackgroundRunner, SyncRunner};
-pub use infrastructure::{TaskCache, TaskKitError};
+pub use infrastructure::{
+    render_chain, CacheError, ContextChain, ContextualError, PersistentTaskCache, ResultContext,
+    TaskCache, TaskKitError,
+};
 
 /// Framework version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
