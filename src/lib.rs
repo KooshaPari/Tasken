@@ -22,6 +22,7 @@
 
 pub mod adapters;
 pub mod application;
+pub mod cron_parser;
 pub mod domain;
 pub mod infrastructure;
 
