@@ -106,7 +106,7 @@ impl PersistentTaskCache {
     }
 
     /// Create an ephemeral (in-memory only) cache. Useful for tests.
-    pub fn ephemeral(default_ttl: Duration) -> Self {
+    pub fn ephemeral(_default_ttl: Duration) -> Self {
         Self {
             path: None,
             inner: Arc::new(Mutex::new(HashMap::new())),
