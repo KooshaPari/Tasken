@@ -221,6 +221,12 @@ impl TaskService {
         Ok(result)
     }
 
+    /// Save a task directly (primarily for testing).
+    pub async fn save_task(&self, task: &Task) -> Result<(), TaskError> {
+        self.storage.save_task(task).await?;
+        Ok(())
+    }
+
     /// Create a workflow.
     pub async fn create_workflow(&self, workflow: Workflow) -> Result<Workflow, TaskError> {
         self.storage.save_workflow(&workflow).await?;

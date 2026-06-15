@@ -301,7 +301,7 @@ async fn test_cli_list_command_with_combined_filters() {
 async fn test_cli_workflow_create_and_get_round_trip() {
     // The CLI's WorkflowCommand::Create and Get handlers delegate to
     // service.create_workflow / get_workflow.
-    use taskkit::domain::workflows::WorkflowId;
+    use taskkit::domain::workflows::{Workflow, WorkflowId};
     let service = setup_service();
     let wf = Workflow::new("cli-wf");
     let created = service.create_workflow(wf).await.unwrap();
