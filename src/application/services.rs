@@ -15,24 +15,37 @@ use std::sync::Arc;
 pub struct TaskService {
     storage: Arc<dyn StoragePort>,
     queue: Arc<dyn QueuePort>,
-    cache: crate::infrastructure::TaskCache,
+    cache: Arc<crate::infrastructure::PersistentTaskCache>,
 }
 
 impl TaskService {
-    /// Create a new task service.
+    /// Create a new task service with a disk-backed cache at ~/.taskkit/cache.json.
     pub fn new(storage: Arc<dyn StoragePort>, queue: Arc<dyn QueuePort>) -> Self {
+        let cache_path = dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join(".taskkit")
+            .join("cache.json");
+        let cache = crate::infrastructure::PersistentTaskCache::open(
+            &cache_path,
+            std::time::Duration::from_secs(300),
+        )
+        .unwrap_or_else(|_| {
+            crate::infrastructure::PersistentTaskCache::ephemeral(
+                std::time::Duration::from_secs(300),
+            )
+        });
         Self {
             storage,
             queue,
-            cache: crate::infrastructure::TaskCache::default(),
+            cache: Arc::new(cache),
         }
     }
 
-    /// Create a new task service with a custom cache.
+    /// Create a new task service with a custom persistent cache.
     pub fn with_cache(
         storage: Arc<dyn StoragePort>,
         queue: Arc<dyn QueuePort>,
-        cache: crate::infrastructure::TaskCache,
+        cache: Arc<crate::infrastructure::PersistentTaskCache>,
     ) -> Self {
         Self { storage, queue, cache }
     }
@@ -62,6 +75,11 @@ impl TaskService {
         }
 
         task = task.with_data(cmd.data);
+
+        // Set dependencies
+        for dep in cmd.depends_on {
+            task = task.with_dependency(dep);
+        }
 
         // Persist the task
         self.storage.save_task(&task).await?;
@@ -172,9 +190,9 @@ impl TaskService {
         ))
     }
 
-    /// Run a task synchronously using the shell runner with cache support.
+    /// Run a task synchronously using the shell runner with disk-backed cache.
     pub async fn run_task(&self, task_id: &TaskId) -> Result<TaskResult, TaskError> {
-        // Check cache first
+        // Check cache first (disk-backed persistent cache)
         if let Some(cached) = self.cache.get(task_id) {
             return Ok(cached);
         }
@@ -191,9 +209,13 @@ impl TaskService {
         // Save updated task state back to storage
         self.storage.save_task(&task).await?;
 
-        // Cache successful results
+        // Cache successful results to disk
         if result.success {
-            self.cache.insert(task_id.clone(), result.clone());
+            self.cache
+                .insert(task_id.clone(), result.clone())
+                .map_err(|e| {
+                    TaskError::StorageError(format!("cache persist failed: {e}"))
+                })?;
         }
 
         Ok(result)
@@ -236,6 +258,27 @@ impl TaskService {
         }
 
         Ok(results)
+    }
+
+    /// List tasks in dependency order (topological sort).
+    /// Tasks with no dependencies come first.
+    pub async fn list_tasks_sorted(
+        &self,
+        state_filter: Option<TaskState>,
+        tag_filter: Option<String>,
+    ) -> Result<Vec<Task>, TaskError> {
+        let mut tasks = self.storage.list_tasks().await?;
+
+        // Apply filters
+        if let Some(state) = state_filter {
+            tasks.retain(|t| t.state == state);
+        }
+        if let Some(tag) = tag_filter {
+            tasks.retain(|t| t.tags.contains(&tag));
+        }
+
+        // Topological sort by dependency graph
+        Ok(crate::domain::topological_sort_tasks(&tasks))
     }
 }
 
@@ -426,5 +469,66 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert!(results[0].success);
         assert!(results[1].success);
+    }
+
+    #[tokio::test]
+    async fn test_list_tasks_sorted_by_dependency() {
+        let service = setup_service();
+
+        let t1 = service
+            .create_task(CreateTask::new("build").with_command("echo build"))
+            .await
+            .unwrap();
+
+        let t2 = service
+            .create_task(
+                CreateTask::new("test").with_command("echo test").with_dependency(t1.id.clone()),
+            )
+            .await
+            .unwrap();
+
+        let t3 = service
+            .create_task(
+                CreateTask::new("deploy")
+                    .with_command("echo deploy")
+                    .with_dependency(t2.id.clone()),
+            )
+            .await
+            .unwrap();
+
+        let sorted = service.list_tasks_sorted(None, None).await.unwrap();
+        assert_eq!(sorted.len(), 3);
+        // build must come before test, test before deploy
+        assert_eq!(sorted[0].name, "build");
+        assert_eq!(sorted[1].name, "test");
+        assert_eq!(sorted[2].name, "deploy");
+    }
+
+    #[tokio::test]
+    async fn test_list_tasks_sorted_with_state_filter() {
+        let service = setup_service();
+
+        let t1 = service
+            .create_task(CreateTask::new("build").with_command("echo build"))
+            .await
+            .unwrap();
+
+        let t2 = service
+            .create_task(
+                CreateTask::new("test").with_command("echo test").with_dependency(t1.id.clone()),
+            )
+            .await
+            .unwrap();
+
+        // Cancel t2
+        service.cancel_task(t2.id.clone(), Some("filtered".to_string())).await.unwrap();
+
+        // Only pending tasks should be returned
+        let sorted = service
+            .list_tasks_sorted(Some(TaskState::Pending), None)
+            .await
+            .unwrap();
+        assert_eq!(sorted.len(), 1);
+        assert_eq!(sorted[0].name, "build");
     }
 }

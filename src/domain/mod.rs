@@ -24,5 +24,5 @@ pub use ports::{NotificationPort, QueuePort, StoragePort, TaskPort};
 pub use runners::{AsyncRunner, BackgroundRunner, ShellRunner, SyncRunner, TaskRunner};
 pub use scheduler::{Schedule, ScheduleKind, Scheduler};
 pub use stream_runner::{run_with_streams, StreamResult, StreamRunner};
-pub use tasks::{Task, TaskResult, TaskState};
+pub use tasks::{Task, TaskResult, TaskState, topological_sort_tasks};
 pub use workflows::{Workflow, WorkflowState, WorkflowStep};

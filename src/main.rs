@@ -7,7 +7,7 @@ use taskkit::adapters::secondary::file::FileStorage;
 use taskkit::application::services::TaskService;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let data_dir = dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("taskkit");
@@ -18,5 +18,5 @@ async fn main() {
     let queue = Arc::new(FileStorage::new(&store_path));
     let service = Arc::new(TaskService::new(storage, queue));
 
-    CliAdapter::run(service).await;
+    CliAdapter::run(service).await
 }

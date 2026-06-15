@@ -4,6 +4,7 @@ use super::errors::TaskError;
 use super::events::TaskEvent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 /// Unique task identifier.
@@ -108,6 +109,8 @@ pub struct Task {
     pub data: serde_json::Value,
     /// Tags for categorization.
     pub tags: Vec<String>,
+    /// Dependencies — other task IDs that must complete before this task runs.
+    pub depends_on: Vec<TaskId>,
 }
 
 impl Task {
@@ -130,6 +133,7 @@ impl Task {
             retry_count: 0,
             data: serde_json::Value::Null,
             tags: Vec::new(),
+            depends_on: Vec::new(),
         }
     }
 
@@ -166,6 +170,12 @@ impl Task {
     /// Set the payload data.
     pub fn with_data(mut self, data: serde_json::Value) -> Self {
         self.data = data;
+        self
+    }
+
+    /// Add a dependency on another task.
+    pub fn with_dependency(mut self, task_id: TaskId) -> Self {
+        self.depends_on.push(task_id);
         self
     }
 
@@ -401,4 +411,125 @@ mod tests {
         task.transition_to(TaskState::Completed).unwrap();
         assert!(task.transition_to(TaskState::Failed).is_err());
     }
+
+    #[test]
+    fn test_depends_on() {
+        let task = Task::new("dep-test")
+            .with_dependency(TaskId::from_string("pre-req"))
+            .with_dependency(TaskId::from_string("another-req"));
+        assert_eq!(task.depends_on.len(), 2);
+        assert_eq!(task.depends_on[0].0, "pre-req");
+    }
+
+    #[test]
+    fn test_topological_sort_empty() {
+        let sorted = topological_sort_tasks(&[]);
+        assert!(sorted.is_empty());
+    }
+
+    #[test]
+    fn test_topological_sort_no_deps() {
+        let t1 = Task::new("a");
+        let t2 = Task::new("b");
+        let sorted = topological_sort_tasks(&[t2.clone(), t1.clone()]);
+        // Without deps, preserved in original order
+        assert_eq!(sorted.len(), 2);
+    }
+
+    #[test]
+    fn test_topological_sort_with_deps() {
+        let t1 = Task::new("build-lib");
+        let t2 = Task::new("run-tests")
+            .with_dependency(t1.id.clone());
+        let t3 = Task::new("deploy")
+            .with_dependency(t2.id.clone());
+
+        let sorted = topological_sort_tasks(&[t3.clone(), t2.clone(), t1.clone()]);
+        assert_eq!(sorted.len(), 3);
+        // build-lib must be first, run-tests second, deploy third
+        assert_eq!(sorted[0].name, "build-lib");
+        assert_eq!(sorted[1].name, "run-tests");
+        assert_eq!(sorted[2].name, "deploy");
+    }
+
+    #[test]
+    fn test_topological_sort_detects_cycle() {
+        let mut t1 = Task::new("a");
+        let mut t2 = Task::new("b").with_dependency(t1.id.clone());
+        t1.depends_on.push(t2.id.clone()); // a -> b -> a: cycle
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            topological_sort_tasks(&[t1, t2]);
+        }));
+        assert!(result.is_err());
+    }
+}
+
+/// Topologically sort tasks based on their `depends_on` field.
+///
+/// Uses Kahn's algorithm. Tasks with no dependencies come first,
+/// followed by tasks whose dependencies are satisfied.
+///
+/// # Panics
+///
+/// Panics if a cycle is detected in the dependency graph.
+pub fn topological_sort_tasks(tasks: &[Task]) -> Vec<Task> {
+    if tasks.is_empty() {
+        return Vec::new();
+    }
+
+    let mut in_degree: HashMap<String, usize> = HashMap::new();
+    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+    let mut task_map: HashMap<String, &Task> = HashMap::new();
+
+    for task in tasks {
+        in_degree.entry(task.id.0.clone()).or_insert(0);
+        adjacency.entry(task.id.0.clone()).or_default();
+        task_map.insert(task.id.0.clone(), task);
+    }
+
+    for task in tasks {
+        for dep in &task.depends_on {
+            adjacency
+                .entry(dep.0.clone())
+                .or_default()
+                .push(task.id.0.clone());
+            *in_degree.entry(task.id.0.clone()).or_insert(0) += 1;
+        }
+    }
+
+    let mut queue: Vec<String> = in_degree
+        .iter()
+        .filter_map(|(id, deg)| if *deg == 0 { Some(id.clone()) } else { None })
+        .collect::<Vec<_>>();
+    queue.sort();
+
+    let mut sorted: Vec<Task> = Vec::with_capacity(tasks.len());
+    let mut visited = HashSet::new();
+
+    while let Some(id) = queue.pop() {
+        visited.insert(id.clone());
+        if let Some(task) = task_map.get(&id) {
+            sorted.push((*task).clone());
+        }
+        if let Some(children) = adjacency.get(&id) {
+            for child in children {
+                if let Some(deg) = in_degree.get_mut(child) {
+                    *deg = deg.saturating_sub(1);
+                    if *deg == 0 && !visited.contains(child.as_str()) {
+                        queue.push(child.clone());
+                    }
+                }
+            }
+        }
+        queue.sort();
+    }
+
+    assert_eq!(
+        visited.len(),
+        tasks.len(),
+        "cycle detected in task dependency graph"
+    );
+
+    sorted
 }

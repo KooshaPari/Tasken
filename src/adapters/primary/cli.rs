@@ -6,6 +6,7 @@ use crate::application::{
 use crate::domain::errors::TaskError;
 use crate::domain::tasks::{Priority, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowStep};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
 
@@ -70,10 +71,19 @@ pub enum Command {
         reason: Option<String>,
     },
     /// Run a task by ID (shell execution).
+    ///
+    /// Forwarded args: everything after `--` is appended to the task's
+    /// shell command (if the task has a `command` field in its data).
+    ///
+    /// Example:
+    ///   taskkit run --id build -- --release --target=x86_64
     Run {
         /// Task ID.
         #[arg(short, long)]
         id: String,
+        /// Forwarded arguments (after `--`). Appended to the task command.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
     /// Run a task with raw arguments forwarded after `--`.
     ///
@@ -201,16 +211,16 @@ pub struct CliAdapter;
 
 impl CliAdapter {
     /// Run the CLI.
-    pub async fn run(service: Arc<TaskService>) {
+    pub async fn run(service: Arc<TaskService>) -> anyhow::Result<()> {
         let cli = Cli::parse();
 
-        if let Err(e) = Self::handle_command(cli, service).await {
-            eprintln!("error: {e}");
-            std::process::exit(1);
-        }
+        Self::handle_command(cli, service)
+            .await
+            .context("CLI command execution failed")?;
+        Ok(())
     }
 
-    async fn handle_command(cli: Cli, service: Arc<TaskService>) -> Result<(), TaskError> {
+    async fn handle_command(cli: Cli, service: Arc<TaskService>) -> anyhow::Result<()> {
         match cli.command {
             Command::Create {
                 name,
@@ -264,12 +274,31 @@ impl CliAdapter {
                 service.cancel_task(task_id, reason).await?;
                 println!("Task cancelled");
             }
-            Command::Run { id } => {
+            Command::Run { id, args } => {
                 let task_id = TaskId::from_string(id);
-                let result = service.run_task(&task_id).await?;
-                println!("{}", serde_json::to_string_pretty(&result).unwrap());
-                if !result.success {
-                    std::process::exit(1);
+                if args.is_empty() {
+                    // Standard run using the service (with cache)
+                    let result = service.run_task(&task_id).await?;
+                    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                    if !result.success {
+                        std::process::exit(1);
+                    }
+                } else {
+                    // Argument forwarding: compose and run with streams
+                    let mut task = service
+                        .get_task(&task_id)
+                        .await?
+                        .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
+                    let forwarded = ForwardedArgs::from_slice(&args);
+                    let base = task
+                        .data
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let composed = compose_command(&base, &forwarded);
+                    task.data = serde_json::json!({"command": composed});
+                    crate::domain::run_with_streams(&mut task, true).context("stream execution failed")?;
                 }
             }
             Command::RunArgs { id, args } => {
@@ -397,5 +426,153 @@ mod tests {
         assert_eq!(Cli::parse_state("pending"), Some(TaskState::Pending));
         assert_eq!(Cli::parse_state("running"), Some(TaskState::Running));
         assert_eq!(Cli::parse_state("unknown"), None);
+    }
+
+    #[test]
+    fn test_cli_parses_create_raw_with_forwarded_args() {
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "create-raw",
+            "--name",
+            "build",
+            "--priority",
+            "high",
+            "--command",
+            "cargo build",
+            "--",
+            "--release",
+            "--target=x86_64",
+            "--features",
+            "tokio,serde",
+        ])
+        .expect("parse should succeed");
+
+        match cli.command {
+            Command::CreateRaw {
+                name,
+                priority,
+                command,
+                args,
+                ..
+            } => {
+                assert_eq!(name, "build");
+                assert_eq!(priority, "high");
+                assert_eq!(command.as_deref(), Some("cargo build"));
+                assert_eq!(
+                    args,
+                    vec![
+                        "--release".to_string(),
+                        "--target=x86_64".to_string(),
+                        "--features".to_string(),
+                        "tokio,serde".to_string(),
+                    ]
+                );
+            }
+            other => panic!("expected CreateRaw, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parses_run_args_with_forwarded() {
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "run-args",
+            "--id",
+            "abc-123",
+            "--",
+            "--release",
+            "--",
+            "nested-arg",
+        ])
+        .expect("parse should succeed");
+
+        match cli.command {
+            Command::RunArgs { id, args } => {
+                assert_eq!(id, "abc-123");
+                assert_eq!(
+                    args,
+                    vec![
+                        "--release".to_string(),
+                        "--".to_string(),
+                        "nested-arg".to_string()
+                    ]
+                );
+            }
+            other => panic!("expected RunArgs, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_create_raw_without_command() {
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "create-raw",
+            "--name",
+            "echo-task",
+            "--",
+            "echo",
+            "hello world",
+        ])
+        .expect("parse should succeed");
+        match cli.command {
+            Command::CreateRaw { command, args, .. } => {
+                assert!(command.is_none());
+                assert_eq!(args, vec!["echo".to_string(), "hello world".to_string()]);
+            }
+            other => panic!("expected CreateRaw, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_rejects_missing_required_name() {
+        let res = Cli::try_parse_from(["taskkit", "create-raw", "--", "echo"]);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_cli_parses_run_with_forwarded_args() {
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "run",
+            "--id",
+            "abc-123",
+            "--",
+            "--release",
+            "--target=x86_64",
+        ])
+        .expect("parse should succeed");
+
+        match cli.command {
+            Command::Run { id, args } => {
+                assert_eq!(id, "abc-123");
+                assert_eq!(
+                    args,
+                    vec![
+                        "--release".to_string(),
+                        "--target=x86_64".to_string(),
+                    ]
+                );
+            }
+            other => panic!("expected Run, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parses_run_without_forwarded_args() {
+        let cli = Cli::try_parse_from([
+            "taskkit",
+            "run",
+            "--id",
+            "abc-123",
+        ])
+        .expect("parse should succeed");
+
+        match cli.command {
+            Command::Run { id, args } => {
+                assert_eq!(id, "abc-123");
+                assert!(args.is_empty());
+            }
+            other => panic!("expected Run, got {other:?}"),
+        }
     }
 }

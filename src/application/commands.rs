@@ -15,6 +15,7 @@ pub struct CreateTask {
     pub retry_policy: Option<RetryPolicy>,
     pub tags: Vec<String>,
     pub data: serde_json::Value,
+    pub depends_on: Vec<TaskId>,
 }
 
 impl CreateTask {
@@ -27,6 +28,7 @@ impl CreateTask {
             retry_policy: None,
             tags: Vec::new(),
             data: serde_json::Value::Null,
+            depends_on: Vec::new(),
         }
     }
 
@@ -62,6 +64,12 @@ impl CreateTask {
 
     pub fn with_command(mut self, command: impl Into<String>) -> Self {
         self.data = serde_json::json!({"command": command.into()});
+        self
+    }
+
+    /// Add a dependency on another task.
+    pub fn with_dependency(mut self, task_id: TaskId) -> Self {
+        self.depends_on.push(task_id);
         self
     }
 
