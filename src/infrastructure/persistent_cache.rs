@@ -49,7 +49,7 @@ impl PersistentTaskCache {
     ///
     /// If the file exists, entries are loaded from it. Stale entries
     /// (past their TTL) are discarded on load.
-    pub fn open(path: &Path, default_ttl: Duration) -> Result<Self, String> {
+    pub fn open(path: &Path, _default_ttl: Duration) -> Result<Self, String> {
         let entries = if path.exists() {
             match fs::read_to_string(path) {
                 Ok(content) => {
