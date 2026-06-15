@@ -29,6 +29,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+clap-ext = { git = "https://github.com/KooshaPari/clap-ext", tag = "v0.1.0" }
 
 # Error handling
 thiserror = "2.0"
