@@ -21,7 +21,7 @@ use taskkit::application::CreateTask;
 use taskkit::domain::scheduler::{Schedule, ScheduleId, ScheduleKind};
 use taskkit::domain::tasks::{Priority, RetryPolicy, TaskId, TaskResult, TaskState};
 use taskkit::domain::workflows::Workflow;
-use taskkit::infrastructure::TaskCache;
+use taskkit::infrastructure::{TaskCache, PersistentTaskCache};
 
 // ---------- Cache (src/infrastructure/cache.rs) ----------
 
@@ -220,11 +220,13 @@ fn setup_service() -> Arc<TaskService> {
 
 #[tokio::test]
 async fn test_service_with_cache_uses_provided_cache() {
-    // Build a custom TaskCache and confirm TaskService::with_cache
+    // Build a custom PersistentTaskCache and confirm TaskService::with_cache
     // accepts it without panicking and produces a working service.
     let storage = Arc::new(MemoryStorage::new());
     let queue = Arc::new(MemoryStorage::new());
-    let cache = TaskCache::new(Duration::from_millis(10));
+    let cache = Arc::new(taskkit::infrastructure::PersistentTaskCache::ephemeral(
+        Duration::from_millis(10),
+    ));
     let service = TaskService::with_cache(storage, queue, cache);
 
     let cmd = CreateTask::new("custom-cache").with_command("echo hi");
