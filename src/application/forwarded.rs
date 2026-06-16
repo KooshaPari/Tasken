@@ -151,6 +151,7 @@ fn is_shell_metachar(b: u8) -> bool {
             | b'#'
             | b'~'
             | b'!'
+            | b','
     )
 }
 
@@ -188,6 +189,8 @@ pub fn compose_command(base: &str, forwarded: &ForwardedArgs) -> String {
     let quoted = forwarded.shell_quote();
     if quoted.is_empty() {
         base.to_string()
+    } else if base.is_empty() {
+        quoted
     } else {
         format!("{base} {quoted}")
     }

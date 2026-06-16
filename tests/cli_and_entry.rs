@@ -307,7 +307,7 @@ async fn test_cli_workflow_create_and_get_round_trip() {
     let created = service.create_workflow(wf).await.unwrap();
     let fetched = service.get_workflow(&created.id).await.unwrap().expect("some");
     assert_eq!(fetched.name, "cli-wf");
-    assert_eq!(created.id, WorkflowId::default()); // sanity: id is set
+    assert_ne!(created.id, WorkflowId::default()); // sanity: id is not default/zero
 }
 
 #[tokio::test]

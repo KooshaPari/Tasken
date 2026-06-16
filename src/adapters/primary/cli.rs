@@ -196,6 +196,7 @@ impl Cli {
     pub fn parse_state(s: &str) -> Option<TaskState> {
         match s.to_lowercase().as_str() {
             "pending" => Some(TaskState::Pending),
+            "scheduled" => Some(TaskState::Scheduled),
             "running" => Some(TaskState::Running),
             "completed" => Some(TaskState::Completed),
             "failed" => Some(TaskState::Failed),

@@ -13,8 +13,8 @@ use std::sync::Arc;
 /// Task application service.
 #[derive(Clone)]
 pub struct TaskService {
-    storage: Arc<dyn StoragePort>,
-    queue: Arc<dyn QueuePort>,
+    pub(crate) storage: Arc<dyn StoragePort>,
+    pub(crate) queue: Arc<dyn QueuePort>,
     cache: Arc<crate::infrastructure::PersistentTaskCache>,
 }
 

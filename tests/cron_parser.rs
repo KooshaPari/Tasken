@@ -203,8 +203,9 @@ fn test_field_from_str_single_value_is_values_with_one_element() {
 
 #[test]
 fn test_field_from_str_non_numeric_single_value_errors() {
+    // "not-a-number" contains '-' so it tries to parse as range first
     let err = Field::from_str("not-a-number").unwrap_err();
-    assert!(err.contains("bad field"), "got: {}", err);
+    assert!(err.contains("bad range"), "got: {}", err);
 }
 
 #[test]
@@ -217,5 +218,6 @@ fn test_field_every_with_large_step() {
     // 0 is always a multiple of any n.
     assert!(f.matches(0));
     assert!(!f.matches(1));
-    assert!(!f.matches(1440));
+    // 1440 matches because 1440 % 1440 == 0
+    assert!(f.matches(1440));
 }

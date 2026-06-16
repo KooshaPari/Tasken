@@ -42,6 +42,8 @@ pub struct PersistentTaskCache {
     inner: Arc<Mutex<HashMap<TaskId, (TaskResult, Instant, Duration)>>>,
     /// Whether the cache is in ephemeral mode (no disk persistence).
     ephemeral: bool,
+    /// Default TTL for new entries inserted via `insert()`.
+    default_ttl: Duration,
 }
 
 impl PersistentTaskCache {
@@ -49,7 +51,7 @@ impl PersistentTaskCache {
     ///
     /// If the file exists, entries are loaded from it. Stale entries
     /// (past their TTL) are discarded on load.
-    pub fn open(path: &Path, _default_ttl: Duration) -> Result<Self, String> {
+    pub fn open(path: &Path, default_ttl: Duration) -> Result<Self, String> {
         let entries = if path.exists() {
             match fs::read_to_string(path) {
                 Ok(content) => {
@@ -102,15 +104,17 @@ impl PersistentTaskCache {
             path: Some(path.to_path_buf()),
             inner: Arc::new(Mutex::new(inner)),
             ephemeral: false,
+            default_ttl,
         })
     }
 
     /// Create an ephemeral (in-memory only) cache. Useful for tests.
-    pub fn ephemeral(_default_ttl: Duration) -> Self {
+    pub fn ephemeral(default_ttl: Duration) -> Self {
         Self {
             path: None,
             inner: Arc::new(Mutex::new(HashMap::new())),
             ephemeral: true,
+            default_ttl,
         }
     }
 
@@ -127,7 +131,7 @@ impl PersistentTaskCache {
 
     /// Insert a result into the cache and persist to disk (if not ephemeral).
     pub fn insert(&self, task_id: TaskId, result: TaskResult) -> Result<(), String> {
-        let ttl = Duration::from_secs(300); // 5-minute default TTL
+        let ttl = self.default_ttl;
         {
             let mut map = self.inner.lock().map_err(|e| e.to_string())?;
             map.insert(task_id.clone(), (result, Instant::now(), ttl));
@@ -268,11 +272,11 @@ mod tests {
 
     #[test]
     fn test_ephemeral_ttl_expiration() {
-        let cache = PersistentTaskCache::ephemeral(Duration::from_millis(1));
+        let cache = PersistentTaskCache::ephemeral(Duration::from_millis(10));
         let task_id = TaskId::from_string("t2");
         let result = make_result("t2");
         cache.insert(task_id.clone(), result).unwrap();
-        std::thread::sleep(Duration::from_millis(20));
+        std::thread::sleep(Duration::from_millis(50));
         assert!(cache.get(&task_id).is_none());
     }
 
