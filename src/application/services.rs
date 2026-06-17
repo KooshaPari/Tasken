@@ -243,7 +243,10 @@ impl TaskService {
         self.storage.list_workflows().await.map_err(Into::into)
     }
 
-    /// Execute a workflow.
+    /// Execute a workflow with parallel step execution.
+    ///
+    /// Steps whose dependencies are all satisfied run concurrently in each wave.
+    /// Waves advance as steps complete, respecting the DAG's partial order.
     pub async fn execute_workflow(&self, workflow_id: &WorkflowId) -> Result<Vec<TaskResult>, TaskError> {
         let mut workflow = self
             .storage
@@ -253,17 +256,42 @@ impl TaskService {
 
         workflow.build_dag().map_err(|e| TaskError::InvalidOperation(e))?;
 
-        let order = workflow.execution_order().map_err(|e| TaskError::InvalidOperation(e))?;
-        let mut results = Vec::new();
+        let mut completed_step_ids: Vec<String> = Vec::new();
+        let mut all_results: Vec<TaskResult> = Vec::new();
+        let total_steps = workflow.steps.len();
 
-        for step in order {
-            if let Some(ref task_id) = step.task_id {
-                let result = self.run_task(task_id).await?;
-                results.push(result);
+        // Wave-based parallel execution: each wave is the set of steps whose
+        // dependencies are fully satisfied by the previously-completed waves.
+        while completed_step_ids.len() < total_steps {
+            let ready: Vec<_> = workflow
+                .ready_steps(&completed_step_ids)
+                .into_iter()
+                .cloned()
+                .collect();
+
+            if ready.is_empty() {
+                // No runnable steps but not all done — cycle or broken DAG.
+                return Err(TaskError::InvalidOperation(
+                    "Workflow stalled: no ready steps but execution is incomplete".to_string(),
+                ));
             }
+
+            // Launch all ready steps concurrently.
+            let wave_futures: Vec<_> = ready
+                .iter()
+                .filter_map(|step| step.task_id.as_ref().map(|tid| self.run_task(tid)))
+                .collect();
+
+            let wave_results = futures::future::try_join_all(wave_futures).await?;
+
+            // Record which steps finished (whether or not they had a task_id).
+            for step in &ready {
+                completed_step_ids.push(step.id.clone());
+            }
+            all_results.extend(wave_results);
         }
 
-        Ok(results)
+        Ok(all_results)
     }
 
     /// List tasks in dependency order (topological sort).
@@ -536,5 +564,90 @@ mod tests {
             .unwrap();
         assert_eq!(sorted.len(), 1);
         assert_eq!(sorted[0].name, "build");
+    }
+
+    /// Diamond DAG: A → (B, C) → D.
+    /// B and C have no inter-dependency and must run in the same wave.
+    #[tokio::test]
+    async fn test_execute_workflow_parallel_diamond() {
+        let service = setup_service();
+
+        let task_a = service.create_task(CreateTask::new("a").with_command("echo a")).await.unwrap();
+        let task_b = service.create_task(CreateTask::new("b").with_command("echo b")).await.unwrap();
+        let task_c = service.create_task(CreateTask::new("c").with_command("echo c")).await.unwrap();
+        let task_d = service.create_task(CreateTask::new("d").with_command("echo d")).await.unwrap();
+
+        // Diamond: a → b, a → c, (b ∧ c) → d
+        let workflow = Workflow::new("diamond")
+            .with_step(WorkflowStep::new("a").with_task(task_a.id.clone()))
+            .with_step(WorkflowStep::new("b").with_task(task_b.id.clone()).with_dependency("a"))
+            .with_step(WorkflowStep::new("c").with_task(task_c.id.clone()).with_dependency("a"))
+            .with_step(
+                WorkflowStep::new("d")
+                    .with_task(task_d.id.clone())
+                    .with_dependency("b")
+                    .with_dependency("c"),
+            );
+
+        let created = service.create_workflow(workflow).await.unwrap();
+        let results = service.execute_workflow(&created.id).await.unwrap();
+
+        // All four tasks must succeed.
+        assert_eq!(results.len(), 4);
+        assert!(results.iter().all(|r| r.success));
+    }
+
+    /// Fork DAG: A → (B, C, D) — three independent branches off a single root.
+    #[tokio::test]
+    async fn test_execute_workflow_parallel_fork() {
+        let service = setup_service();
+
+        let task_a = service.create_task(CreateTask::new("root").with_command("echo root")).await.unwrap();
+        let task_b = service.create_task(CreateTask::new("branch-1").with_command("echo b1")).await.unwrap();
+        let task_c = service.create_task(CreateTask::new("branch-2").with_command("echo b2")).await.unwrap();
+        let task_d = service.create_task(CreateTask::new("branch-3").with_command("echo b3")).await.unwrap();
+
+        let workflow = Workflow::new("fork")
+            .with_step(WorkflowStep::new("a").with_task(task_a.id.clone()))
+            .with_step(WorkflowStep::new("b").with_task(task_b.id.clone()).with_dependency("a"))
+            .with_step(WorkflowStep::new("c").with_task(task_c.id.clone()).with_dependency("a"))
+            .with_step(WorkflowStep::new("d").with_task(task_d.id.clone()).with_dependency("a"));
+
+        let created = service.create_workflow(workflow).await.unwrap();
+        let results = service.execute_workflow(&created.id).await.unwrap();
+
+        assert_eq!(results.len(), 4);
+        assert!(results.iter().all(|r| r.success));
+    }
+
+    /// Stall detection: artificially inject an impossible dependency to trigger the stall error.
+    #[tokio::test]
+    async fn test_execute_workflow_stall_is_detected() {
+        use crate::domain::workflows::WorkflowStep;
+
+        let service = setup_service();
+        let task_a = service.create_task(CreateTask::new("alone").with_command("echo alone")).await.unwrap();
+
+        // Manually build a workflow where "a" depends on a ghost step that never completes.
+        let mut ghost_step = WorkflowStep::new("ghost");
+        ghost_step.task_id = None; // no task — the wave executor skips it for results but still marks it done
+        // We actually want to test a broken dependency reference (step depends on non-existent step).
+        // Simulate by building the workflow with a step that references a dep not in the graph.
+        let mut bad_step = WorkflowStep::new("bad");
+        bad_step.task_id = Some(task_a.id.clone());
+        bad_step.depends_on = vec!["nonexistent-step".to_string()];
+
+        let workflow = Workflow::new("stall-test")
+            .with_step(bad_step);
+
+        // build_dag succeeds (the missing dep is simply not added as an edge),
+        // but ready_steps will never return "bad" because "nonexistent-step" is never completed.
+        // This exercises the stall-detection branch.
+        let created = service.create_workflow(workflow).await.unwrap();
+        let err = service.execute_workflow(&created.id).await.unwrap_err();
+        assert!(
+            matches!(err, TaskError::InvalidOperation(_)),
+            "expected InvalidOperation stall error, got: {err:?}"
+        );
     }
 }
