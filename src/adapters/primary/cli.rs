@@ -2,8 +2,10 @@
 //! CLI adapter for command-line interaction.
 
 use crate::application::{
-    compose_command, CreateTask, ForwardedArgs, ListTasks, TaskService,
+    compose_command, watcher::FileWatcher, CreateTask, ForwardedArgs, ListTasks, TaskService,
 };
+use crate::domain::rate_limiter::{parse_rate_limit, TokenBucket};
+use crate::application::visualize::{generate_dot, generate_mermaid, GraphFormat};
 use crate::domain::errors::TaskError;
 use crate::domain::groups::Group;
 use crate::domain::tasks::{Priority, TaskId, TaskState};
@@ -24,6 +26,13 @@ pub struct Cli {
     /// Suppress output.
     #[arg(short = 's', long, global = true)]
     pub silent: bool,
+    /// Maximum number of tasks that can run concurrently (rate limiter capacity).
+    #[arg(long, global = true, default_value = "0")]
+    pub max_concurrency: u64,
+    /// Rate limit for dispatch, e.g. "10/s", "60/m", "3600/h".
+    /// When set, task execution will be throttled to this rate.
+    #[arg(long, global = true)]
+    pub rate_limit: Option<String>,
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -150,6 +159,23 @@ pub enum Command {
         #[command(subcommand)]
         command: GroupCommand,
     },
+    /// Watch a directory for changes and re-run the default action.
+    Watch {
+        /// Path to watch (file or directory).
+        #[arg(short, long, default_value = ".")]
+        path: String,
+        /// Debounce interval in milliseconds.
+        #[arg(short, long, default_value = "500")]
+        debounce_ms: u64,
+    },
+    /// Generate a dependency graph from a recipe file.
+    Graph {
+        /// Path to the recipe file (TOML or YAML).
+        recipe_file: String,
+        /// Output format: dot or mermaid (default: dot).
+        #[arg(long, default_value = "dot")]
+        format: String,
+    },
 }
 
 /// Workflow subcommands.
@@ -262,6 +288,37 @@ impl CliAdapter {
         if cli.dry_run {
             if !cli.silent {
                 eprintln!("[dry-run] would execute command");
+            }
+        }
+
+        // Attach rate limiter to service if --rate-limit or --max-concurrency is set.
+        if cli.rate_limit.is_some() || cli.max_concurrency > 0 {
+            // Resolve capacity: use --max-concurrency if explicitly set (>0),
+            // otherwise fall back to a sensible default derived from the rate limit.
+            let capacity = if cli.max_concurrency > 0 {
+                cli.max_concurrency
+            } else {
+                // Default capacity = rate_limit (rounded up), min 1.
+                if let Some(ref rl) = cli.rate_limit {
+                    parse_rate_limit(rl)
+                        .map(|r| (r.ceil() as u64).max(1))
+                        .unwrap_or(10)
+                } else {
+                    10
+                }
+            };
+
+            let refill_rate = cli
+                .rate_limit
+                .as_ref()
+                .and_then(|rl| parse_rate_limit(rl))
+                .unwrap_or(10.0);
+
+            let bucket = TokenBucket::new(capacity, refill_rate, None);
+            service.set_rate_limiter(bucket).await;
+
+            if !cli.silent && capacity > 0 {
+                eprintln!("[rate-limiter] capacity={capacity}, rate={refill_rate}/s");
             }
         }
 
@@ -475,6 +532,58 @@ impl CliAdapter {
             }
             Some(Command::Workflow { ref command }) => {
                 Self::handle_workflow_command(&cli, command.clone(), service).await?;
+            }
+            Some(Command::Watch { path, debounce_ms }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would watch path '{}'", path);
+                    }
+                    return Ok(());
+                }
+                let watch_path = std::path::PathBuf::from(&path);
+                let watcher = FileWatcher::new().with_debounce(debounce_ms);
+                let svc = service.clone();
+                watcher
+                    .watch_and_run(&watch_path, move || {
+                        let rt = tokio::runtime::Runtime::new().expect("failed to create runtime for watcher callback");
+                        rt.block_on(async {
+                            let tasks = svc.list_tasks(None, None, None).await;
+                            match tasks {
+                                Ok(tasks) => {
+                                    let by_state = [
+                                        ("pending", crate::domain::tasks::TaskState::Pending),
+                                        ("running", crate::domain::tasks::TaskState::Running),
+                                        ("completed", crate::domain::tasks::TaskState::Completed),
+                                        ("failed", crate::domain::tasks::TaskState::Failed),
+                                        ("cancelled", crate::domain::tasks::TaskState::Cancelled),
+                                    ];
+                                    for (label, state) in &by_state {
+                                        let count = tasks.iter().filter(|t| t.state == *state).count();
+                                        println!("  {:>10}: {}", label, count);
+                                    }
+                                    println!("  {:>10}: {}", "total", tasks.len());
+                                }
+                                Err(e) => eprintln!("[watcher] failed to list tasks: {e}"),
+                            }
+                        });
+                    })
+                    .map_err(|e| anyhow::anyhow!("file watcher error: {e}"))?;
+            }
+            Some(Command::Graph { recipe_file, format }) => {
+                let fmt: GraphFormat = format
+                    .parse()
+                    .map_err(|e: String| anyhow::anyhow!(e))
+                    .context("Invalid graph format")?;
+                let path = std::path::Path::new(&recipe_file);
+                let recipe = crate::domain::recipe::TaskenfileParser::parse_file(path)
+                    .context("Failed to parse recipe file")?;
+                let output = match fmt {
+                    GraphFormat::Dot => generate_dot(&recipe.tasks),
+                    GraphFormat::Mermaid => generate_mermaid(&recipe.tasks),
+                };
+                if !cli.silent {
+                    print!("{output}");
+                }
             }
             Some(Command::Group { ref command }) => {
                 Self::handle_group_command(&cli, command.clone(), service).await?;

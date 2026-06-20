@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn test_topological_sort_detects_cycle() {
         let mut t1 = Task::new("a");
-        let mut t2 = Task::new("b").with_dependency(t1.id.clone());
+        let t2 = Task::new("b").with_dependency(t1.id.clone());
         t1.depends_on.push(t2.id.clone()); // a -> b -> a: cycle
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

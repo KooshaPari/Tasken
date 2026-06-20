@@ -109,6 +109,12 @@ pub struct TaskStepDef {
     pub vars: HashMap<String, String>,
     /// Optional timeout in seconds.
     pub timeout: Option<u64>,
+    /// Optional condition expression for conditional execution.
+    /// Evaluated at runtime; the task is skipped if the condition is `false`.
+    /// Supports: `os == "linux"`, `arch != "x86_64"`, `os contains "nux"`,
+    /// `and`/`or` combinators, and parenthesized grouping.
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 /// Raw parsed representation of a Taskenfile (TOML or YAML).
@@ -146,6 +152,10 @@ pub struct RecipeTask {
     pub vars: HashMap<String, String>,
     /// Optional timeout.
     pub timeout: Option<Duration>,
+    /// Optional runtime condition expression.
+    /// When `Some`, the condition is evaluated before execution;
+    /// the task is skipped if the condition returns `false`.
+    pub condition: Option<String>,
 }
 
 /// A fully resolved recipe parsed from a Taskenfile.
@@ -282,6 +292,7 @@ impl TaskenfileParser {
                 depends_on: task_def.depends_on.clone(),
                 vars: merged_vars,
                 timeout: task_def.timeout.map(|s| Duration::from_secs(s)),
+                condition: task_def.condition.clone(),
             });
         }
 

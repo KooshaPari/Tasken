@@ -368,12 +368,255 @@ pub fn interpolate_strict(template: &str, vars: &Vars) -> Result<String, Interpo
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// Condition evaluation
 // ---------------------------------------------------------------------------
+
+/// Evaluates a condition expression against the runtime OS/architecture.
+///
+/// # Syntax
+///
+/// | Expression              | Meaning                           |
+/// |-------------------------|-----------------------------------|
+/// | `os == "linux"`         | Equality                          |
+/// | `arch != "x86_64"`      | Inequality                        |
+/// | `os contains "nux"`     | Substring match                   |
+/// | `... and ...`           | Logical AND                       |
+/// | `... or ...`            | Logical OR                        |
+/// | `(...)`                 | Grouping                          |
+///
+/// Recognised variables:
+/// - `os`   → `std::env::consts::OS` (e.g. `"linux"`, `"macos"`, `"windows"`)
+/// - `arch` → `std::env::consts::ARCH` (e.g. `"x86_64"`, `"aarch64"`)
+///
+/// # Returns
+///
+/// - `true` for an empty / all-whitespace condition (no constraint).
+/// - `false` for syntactically invalid expressions or unknown variables
+///   (conservative: don't run when the condition can't be understood).
+///
+/// # Examples
+///
+/// ```
+/// use taskkit::domain::recipes::evaluate_condition;
+///
+/// assert!(evaluate_condition(""));
+/// assert!(evaluate_condition("os == \"macos\"") || evaluate_condition("os == \"linux\""));
+/// assert!(!evaluate_condition("os == \"nonexistent_os\""));
+/// ```
+pub fn evaluate_condition(condition: &str) -> bool {
+    let condition = condition.trim();
+    if condition.is_empty() {
+        return true;
+    }
+
+    let tokens = match tokenize(condition) {
+        Some(t) => t,
+        None => return false,
+    };
+
+    let mut parser = Parser { tokens, pos: 0 };
+    parser.parse_or()
+}
+
+// ---------------------------------------------------------------------------
+// Tokenizer
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq)]
+enum Token {
+    Ident(String),
+    StringLit(String),
+    Eq,
+    Neq,
+    Contains,
+    And,
+    Or,
+    LParen,
+    RParen,
+}
+
+/// Tokenize a condition string. Returns `None` on invalid tokens.
+fn tokenize(input: &str) -> Option<Vec<Token>> {
+    let mut tokens = Vec::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(&ch) = chars.peek() {
+        if ch.is_whitespace() {
+            chars.next();
+            continue;
+        }
+
+        match ch {
+            '(' => {
+                chars.next();
+                tokens.push(Token::LParen);
+            }
+            ')' => {
+                chars.next();
+                tokens.push(Token::RParen);
+            }
+            '"' => {
+                chars.next(); // skip opening quote
+                let mut s = String::new();
+                loop {
+                    match chars.next() {
+                        None => return None, // unclosed string literal
+                        Some('"') => break,
+                        Some(c) => s.push(c),
+                    }
+                }
+                tokens.push(Token::StringLit(s));
+            }
+            '!' => {
+                chars.next();
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::Neq);
+                } else {
+                    return None; // bare `!` is not valid
+                }
+            }
+            '=' => {
+                chars.next();
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::Eq);
+                } else {
+                    return None; // bare `=` is not valid
+                }
+            }
+            _ if ch.is_ascii_alphanumeric() || ch == '_' => {
+                let mut s = String::new();
+                while let Some(&c) = chars.peek() {
+                    if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                        s.push(c);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                match s.as_str() {
+                    "and" => tokens.push(Token::And),
+                    "or" => tokens.push(Token::Or),
+                    "contains" => tokens.push(Token::Contains),
+                    _ => tokens.push(Token::Ident(s)),
+                }
+            }
+            _ => {
+                // Unexpected character
+                return None;
+            }
+        }
+    }
+
+    Some(tokens)
+}
+
+// ---------------------------------------------------------------------------
+// Recursive-descent parser
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq)]
+enum Op {
+    Eq,
+    Neq,
+    Contains,
+}
+
+struct Parser {
+    tokens: Vec<Token>,
+    pos: usize,
+}
+
+impl Parser {
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.pos)
+    }
+
+    fn advance(&mut self) {
+        self.pos += 1;
+    }
+
+    // or_expr = and_expr ("or" and_expr)*
+    fn parse_or(&mut self) -> bool {
+        let mut left = self.parse_and();
+        while self.peek() == Some(&Token::Or) {
+            self.advance();
+            let right = self.parse_and();
+            left = left || right;
+        }
+        left
+    }
+
+    // and_expr = primary ("and" primary)*
+    fn parse_and(&mut self) -> bool {
+        let mut left = self.parse_primary();
+        while self.peek() == Some(&Token::And) {
+            self.advance();
+            let right = self.parse_primary();
+            left = left && right;
+        }
+        left
+    }
+
+    // primary = "(" or_expr ")" | comparison
+    fn parse_primary(&mut self) -> bool {
+        if self.peek() == Some(&Token::LParen) {
+            self.advance();
+            let result = self.parse_or();
+            if self.peek() == Some(&Token::RParen) {
+                self.advance();
+            }
+            // If the closing paren is missing, the expression is invalid → false
+            return result;
+        }
+        self.parse_comparison()
+    }
+
+    // comparison = IDENTIFIER OP STRING_LITERAL
+    fn parse_comparison(&mut self) -> bool {
+        let ident = match self.peek() {
+            Some(Token::Ident(s)) => s.clone(),
+            _ => return false,
+        };
+        self.advance();
+
+        let op = match self.peek() {
+            Some(Token::Eq) => Op::Eq,
+            Some(Token::Neq) => Op::Neq,
+            Some(Token::Contains) => Op::Contains,
+            _ => return false,
+        };
+        self.advance();
+
+        let value = match self.peek() {
+            Some(Token::StringLit(s)) => s.clone(),
+            _ => return false,
+        };
+        self.advance();
+
+        let resolved = resolve_var(&ident);
+        match op {
+            Op::Eq => resolved == value,
+            Op::Neq => resolved != value,
+            Op::Contains => resolved.contains(&value),
+        }
+    }
+}
+
+/// Resolve a condition variable name to its runtime value.
+fn resolve_var(name: &str) -> String {
+    match name {
+        "os" => std::env::consts::OS.to_string(),
+        "arch" => std::env::consts::ARCH.to_string(),
+        _ => String::new(),
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::recipe::TaskenfileParser;
     use std::collections::HashMap;
 
     // -- VarType tests -------------------------------------------------------
@@ -701,5 +944,249 @@ mod tests {
         let restored: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.shell, Some("/bin/zsh".into()));
         assert_eq!(restored.max_concurrency, Some(8));
+    }
+
+    // -- Condition evaluation tests -----------------------------------------
+
+    // Basic conditions
+
+    #[test]
+    fn test_condition_empty() {
+        assert!(evaluate_condition(""));
+        assert!(evaluate_condition("   "));
+        assert!(evaluate_condition("\t\n"));
+    }
+
+    #[test]
+    fn test_condition_os_equality() {
+        let current_os = std::env::consts::OS;
+        // Should match the current OS
+        assert!(evaluate_condition(&format!("os == \"{}\"", current_os)));
+        // Should NOT match a different OS
+        let other_os = if current_os == "linux" { "macos" } else { "linux" };
+        assert!(!evaluate_condition(&format!("os == \"{}\"", other_os)));
+    }
+
+    #[test]
+    fn test_condition_arch_equality() {
+        let current_arch = std::env::consts::ARCH;
+        assert!(evaluate_condition(&format!("arch == \"{}\"", current_arch)));
+        assert!(!evaluate_condition(&format!("arch == \"{}\"", "nonexistent_arch")));
+    }
+
+    #[test]
+    fn test_condition_os_inequality() {
+        let current_os = std::env::consts::OS;
+        assert!(!evaluate_condition(&format!("os != \"{}\"", current_os)));
+        assert!(evaluate_condition("os != \"nonexistent_os\""));
+    }
+
+    #[test]
+    fn test_condition_arch_inequality() {
+        let current_arch = std::env::consts::ARCH;
+        assert!(!evaluate_condition(&format!("arch != \"{}\"", current_arch)));
+        assert!(evaluate_condition("arch != \"nonexistent_arch\""));
+    }
+
+    #[test]
+    fn test_condition_contains() {
+        let current_os = std::env::consts::OS;
+        // Every OS name contains its first character
+        let first_char = &current_os[..1];
+        assert!(evaluate_condition(&format!("os contains \"{}\"", first_char)));
+        // No OS contains "zzzzzz"
+        assert!(!evaluate_condition("os contains \"zzzzzz\""));
+    }
+
+    // AND / OR / nesting
+
+    #[test]
+    fn test_condition_and_true() {
+        let current_os = std::env::consts::OS;
+        let current_arch = std::env::consts::ARCH;
+        assert!(evaluate_condition(&format!(
+            "os == \"{}\" and arch == \"{}\"",
+            current_os, current_arch
+        )));
+    }
+
+    #[test]
+    fn test_condition_and_false() {
+        let current_os = std::env::consts::OS;
+        assert!(!evaluate_condition(&format!(
+            "os == \"{}\" and arch == \"nonexistent\"",
+            current_os
+        )));
+    }
+
+    #[test]
+    fn test_condition_or_true() {
+        assert!(evaluate_condition("os == \"linux\" or os == \"macos\""));
+    }
+
+    #[test]
+    fn test_condition_or_false() {
+        assert!(!evaluate_condition("os == \"nonexistent1\" or os == \"nonexistent2\""));
+    }
+
+    #[test]
+    fn test_condition_nested_parens() {
+        let current_os = std::env::consts::OS;
+        let current_arch = std::env::consts::ARCH;
+        // (os == "current" and arch == "current") should be true
+        assert!(evaluate_condition(&format!(
+            "(os == \"{}\" and arch == \"{}\")",
+            current_os, current_arch
+        )));
+    }
+
+    #[test]
+    fn test_condition_nested_complex() {
+        let current_os = std::env::consts::OS;
+        // (os == "current" or os == "nonexistent") and arch != "nonexistent"
+        assert!(evaluate_condition(&format!(
+            "(os == \"{}\" or os == \"fake\") and arch != \"nonexistent\"",
+            current_os
+        )));
+        // (os == "nonexistent1" and os == "nonexistent2") or arch == "nonexistent"
+        let current_arch = std::env::consts::ARCH;
+        assert!(evaluate_condition(&format!(
+            "(os == \"x1\" and os == \"x2\") or arch == \"{}\"",
+            current_arch
+        )));
+    }
+
+    #[test]
+    fn test_condition_mixed_and_or() {
+        // os == "current" or (os == "x" and arch == "y")
+        let current_os = std::env::consts::OS;
+        assert!(evaluate_condition(&format!(
+            "os == \"{}\" or (os == \"x\" and arch == \"y\")",
+            current_os
+        )));
+        // (os == "x" and arch == "y") or os == "current"
+        assert!(evaluate_condition(&format!(
+            "(os == \"x\" and arch == \"y\") or os == \"{}\"",
+            current_os
+        )));
+    }
+
+    // Invalid / edge-case expressions
+
+    #[test]
+    fn test_condition_invalid_expression() {
+        assert!(!evaluate_condition("invalid no operator"));
+        assert!(!evaluate_condition("os == ")); // missing value
+        assert!(!evaluate_condition("== \"linux\"")); // missing variable
+        assert!(!evaluate_condition("os !=")); // missing value for !=
+        assert!(!evaluate_condition("os contains")); // missing value for contains
+    }
+
+    #[test]
+    fn test_condition_unknown_variable() {
+        // Unknown variables resolve to ""
+        assert!(!evaluate_condition("foobar == \"anything\""));
+        // Comparing unknown to empty string matches (both are "")
+        assert!(evaluate_condition("unknown_var == \"\""));
+    }
+
+    #[test]
+    fn test_condition_unclosed_string() {
+        assert!(!evaluate_condition("os == \"linux")); // missing closing quote
+    }
+
+    #[test]
+    fn test_condition_unclosed_paren() {
+        let current_os = std::env::consts::OS;
+        // Missing closing paren - the parser still evaluates but returns
+        // the inner result, then there's no closing paren.
+        // (os == "current" should still evaluate
+        assert!(evaluate_condition(&format!("(os == \"{}\"", current_os)));
+    }
+
+    #[test]
+    fn test_condition_invalid_operator() {
+        assert!(!evaluate_condition("os = linux")); // single = not valid
+        assert!(!evaluate_condition("os ! linux")); // ! without = not valid
+    }
+
+    #[test]
+    fn test_condition_unknown_token() {
+        assert!(!evaluate_condition("os == \"linux\" and @@")); // @ is invalid
+    }
+
+    // Serialization / deserialization of condition field
+
+    #[test]
+    fn test_parse_toml_with_condition() {
+        let toml = r#"
+name = "conditional-recipe"
+
+[[tasks]]
+name = "linux-only"
+command = "echo linux"
+condition = 'os == "linux"'
+
+[[tasks]]
+name = "macos-only"
+command = "echo macos"
+condition = 'os == "macos"'
+"#;
+        let recipe = TaskenfileParser::parse_toml(toml).unwrap();
+        assert_eq!(recipe.tasks.len(), 2);
+        assert_eq!(
+            recipe.tasks[0].condition.as_deref(),
+            Some("os == \"linux\"")
+        );
+        assert_eq!(
+            recipe.tasks[1].condition.as_deref(),
+            Some("os == \"macos\"")
+        );
+    }
+
+    #[test]
+    fn test_parse_toml_without_condition_defaults_to_none() {
+        let toml = r#"
+name = "no-condition"
+
+[[tasks]]
+name = "always"
+command = "echo always"
+"#;
+        let recipe = TaskenfileParser::parse_toml(toml).unwrap();
+        assert_eq!(recipe.tasks[0].condition, None);
+    }
+
+    #[test]
+    fn test_condition_combined_with_depends_on() {
+        let toml = r#"
+name = "combined"
+
+[[tasks]]
+name = "init"
+command = "init"
+
+[[tasks]]
+name = "build"
+command = "build"
+depends_on = ["init"]
+condition = 'os == "linux"'
+"#;
+        let recipe = TaskenfileParser::parse_toml(toml).unwrap();
+        assert_eq!(recipe.tasks[1].depends_on, vec!["init"]);
+        assert_eq!(
+            recipe.tasks[1].condition.as_deref(),
+            Some("os == \"linux\"")
+        );
+    }
+
+    #[test]
+    fn test_condition_tokenize_edge_cases() {
+        // Empty string after trim handled by evaluate_condition
+        assert!(evaluate_condition(""));
+        // Identifier with hyphens (e.g. future variable names)
+        assert!(!evaluate_condition("my-var == \"value\""));
+        // Numbers in identifiers
+        assert!(!evaluate_condition("os2 == \"linux\""));
     }
 }

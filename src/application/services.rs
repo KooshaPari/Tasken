@@ -4,8 +4,9 @@
 use super::commands::CreateTask;
 use crate::config::TaskenConfig;
 use crate::domain::errors::TaskError;
+use crate::domain::plugins::{PluginContext, PluginRegistry};
 use crate::domain::ports::{QueuePort, StoragePort};
-use crate::domain::runners::{ShellRunner, TaskRunner};
+use crate::domain::rate_limiter::TokenBucket;
 use crate::domain::tasks::{Task, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowId};
 use crate::domain::{events::TaskEvent, Group, GroupId, TaskResult};
@@ -13,11 +14,24 @@ use chrono::Utc;
 use std::sync::Arc;
 
 /// Task application service.
-#[derive(Clone)]
 pub struct TaskService {
     pub(crate) storage: Arc<dyn StoragePort>,
     pub(crate) queue: Arc<dyn QueuePort>,
     cache: Arc<crate::infrastructure::PersistentTaskCache>,
+    pub(crate) plugins: Arc<PluginRegistry>,
+    rate_limiter: Arc<tokio::sync::Mutex<Option<TokenBucket>>>,
+}
+
+impl Clone for TaskService {
+    fn clone(&self) -> Self {
+        Self {
+            storage: Arc::clone(&self.storage),
+            queue: Arc::clone(&self.queue),
+            cache: Arc::clone(&self.cache),
+            plugins: Arc::clone(&self.plugins),
+            rate_limiter: Arc::clone(&self.rate_limiter),
+        }
+    }
 }
 
 impl TaskService {
@@ -54,6 +68,8 @@ impl TaskService {
             storage,
             queue,
             cache: Arc::new(cache),
+            plugins: Arc::new(PluginRegistry::with_defaults()),
+            rate_limiter: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -63,7 +79,21 @@ impl TaskService {
         queue: Arc<dyn QueuePort>,
         cache: Arc<crate::infrastructure::PersistentTaskCache>,
     ) -> Self {
-        Self { storage, queue, cache }
+        Self { storage, queue, cache, plugins: Arc::new(PluginRegistry::with_defaults()), rate_limiter: Arc::new(tokio::sync::Mutex::new(None)) }
+    }
+
+    /// Replace the default plugin registry with a custom one.
+    pub fn with_plugins(mut self, plugins: PluginRegistry) -> Self {
+        self.plugins = Arc::new(plugins);
+        self
+    }
+
+    /// Attach a token-bucket rate limiter to this service.
+    ///
+    /// When set, every call to [`run_task`](Self::run_task) will
+    /// wait for a token before executing the task.
+    pub async fn set_rate_limiter(&self, limiter: TokenBucket) {
+        *self.rate_limiter.lock().await = Some(limiter);
     }
 
     /// Create a new task.
@@ -216,6 +246,14 @@ impl TaskService {
         task_id: &TaskId,
         dry_run: bool,
     ) -> Result<TaskResult, TaskError> {
+        // Apply rate limiter before execution (only in non-dry-run mode).
+        if !dry_run {
+            let bucket = { self.rate_limiter.lock().await.clone() };
+            if let Some(bucket) = bucket {
+                bucket.consume(1).await;
+            }
+        }
+
         // Check cache first (disk-backed persistent cache)
         if !dry_run {
             if let Some(cached) = self.cache.get(task_id) {
@@ -248,8 +286,36 @@ impl TaskService {
         }
 
         let mut task = task;
-        let runner = ShellRunner::new();
-        let result = runner.execute(&mut task)?;
+
+        // Resolve command via the plugin registry.
+        // Find the first plugin that can handle the command; the default
+        // registry always includes ShellPlugin as a catch-all fallback.
+        let cmd = task
+            .data
+            .get("command")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let plugin = self.plugins.find(&cmd).ok_or_else(|| {
+            TaskError::InvalidOperation(
+                "No runner plugin can handle the command".to_string(),
+            )
+        })?;
+
+        // Transition to running
+        let _ = task.transition_to(TaskState::Running);
+
+        let ctx = PluginContext::new(&cmd);
+        let plugin_result = plugin.execute(ctx);
+
+        let result = if plugin_result.success {
+            let _ = task.transition_to(TaskState::Completed);
+            task.success_result(plugin_result.to_json(), plugin_result.duration)
+        } else {
+            let _ = task.transition_to(TaskState::Failed);
+            task.failure_result(plugin_result.stderr, plugin_result.duration)
+        };
 
         // Save updated task state back to storage
         self.storage.save_task(&task).await?;
@@ -614,7 +680,7 @@ mod tests {
             .await
             .unwrap();
 
-        let t3 = service
+        let _t3 = service
             .create_task(
                 CreateTask::new("deploy")
                     .with_command("echo deploy")

@@ -33,6 +33,9 @@ clap = { version = "4.5", features = ["derive"] }
 dotenvy = "0.15"
 libc = "0.2"
 
+# File system watching
+notify = { version = "8", features = ["macos_kqueue"] }
+
 # Error handling
 thiserror = "2.0"
 anyhow = "1.0"

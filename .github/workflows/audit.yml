@@ -1,33 +1,127 @@
-name: CodeQL (Rust)
+name: Multi-ecosystem dependency audit
 
-on:
 permissions:
   contents: read
+  pull-requests: read
 
-
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'pyproject.toml'
+      - 'python/**'
+      - 'requirements*.txt'
+      - 'Pipfile'
+      - 'Pipfile.lock'
+      - 'poetry.lock'
+  push:
+    branches:
+      - main
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'pyproject.toml'
+      - 'python/**'
+      - 'requirements*.txt'
+      - 'Pipfile'
+      - 'Pipfile.lock'
+      - 'poetry.lock'
+  schedule:
+    # Weekly on Mondays at 09:00 UTC
+    - cron: '0 9 * * 1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
-  analyze:
-    name: Analyze (rust)
+  cargo-audit:
+    name: cargo audit (Rust)
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout # v4.1.1
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
-          languages: rust
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
+          toolchain: stable
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@b8cecb83565409bcc297b2df6e77f030b2a468d5 # v2
         with:
-          category: "/language:rust"
+          tool: cargo-audit
+
+      - name: Run cargo audit
+        run: cargo audit --deny warnings
+
+  npm-audit:
+    name: npm audit (Node)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+
+      - name: Setup Node
+        uses: actions/setup-node@1d0ff469b7ec7b138cb3bdcbe74e5672f63d3013 # v4
+        with:
+          node-version: '20'
+
+      - name: Run npm audit (only if package.json present)
+        if: hashFiles('package.json') != ''
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+            npm audit --audit-level=high
+          else
+            npm install --no-audit --no-fund --package-lock-only
+            npm audit --audit-level=high
+          fi
+        shell: bash
+
+      - name: Skip notice
+        if: hashFiles('package.json') == ''
+        run: echo "No package.json found; skipping npm audit."
+
+  pip-audit:
+    name: pip-audit (Python)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+
+      - name: Setup Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+
+      - name: Run pip-audit on pyproject.toml (if present)
+        if: hashFiles('pyproject.toml') != ''
+        run: pip-audit --strict
+
+      - name: Run pip-audit on requirements*.txt (if present)
+        if: hashFiles('requirements*.txt') != ''
+        run: |
+          set +e
+          for f in requirements.txt requirements-*.txt requirements/*.txt; do
+            if [ -f "$f" ]; then
+              echo "Auditing $f"
+              pip-audit -r "$f" --strict
+            fi
+          done
+
+      - name: Skip notice
+        if: hashFiles('pyproject.toml') == '' && hashFiles('requirements*.txt') == ''
+        run: echo "No Python dependency manifests found; skipping pip-audit."

@@ -33,11 +33,12 @@ pub use application::services::TaskService;
 pub use config::TaskenConfig;
 pub use domain::errors::TaskError;
 pub use domain::{
-    Schedule, Scheduler, Task, TaskResult, TaskRunner, TaskState, Workflow,
+    NoopPlugin, PluginContext, PluginRegistry, PluginResult, RunnerPlugin, Schedule,
+    Scheduler, ShellPlugin, Task, TaskResult, TaskRunner, TaskState, Workflow,
 };
 pub use domain::tasks::{Priority, RetryPolicy, TaskId};
 pub use domain::groups::{Group, GroupId};
-pub use domain::recipes::{interpolate, interpolate_strict, predefined_vars, Settings, VarDefinition, VarType, Vars};
+pub use domain::recipes::{evaluate_condition, interpolate, interpolate_strict, predefined_vars, Settings, VarDefinition, VarType, Vars};
 pub use domain::runners::{AsyncRunner, BackgroundRunner, SyncRunner};
 pub use infrastructure::{TaskCache, TaskKitError};
 

@@ -22,7 +22,7 @@ use taskkit::application::CreateTask;
 use taskkit::domain::scheduler::{Schedule, ScheduleId, ScheduleKind};
 use taskkit::domain::tasks::{Priority, RetryPolicy, TaskId, TaskResult};
 use taskkit::domain::workflows::Workflow;
-use taskkit::infrastructure::{TaskCache, PersistentTaskCache};
+use taskkit::infrastructure::TaskCache;
 
 // ---------- Cache (src/infrastructure/cache.rs) ----------
 

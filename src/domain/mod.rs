@@ -11,7 +11,9 @@
 pub mod errors;
 pub mod events;
 pub mod groups;
+pub mod plugins;
 pub mod ports;
+pub mod rate_limiter;
 pub mod recipe;
 pub mod recipes;
 pub mod runners;
@@ -27,10 +29,14 @@ pub use events::{TaskEvent, TaskEventKind};
 pub use groups::{Group, GroupId};
 pub use ports::{NotificationPort, QueuePort, StoragePort, TaskPort};
 pub use recipes::{
-    interpolate, interpolate_strict, predefined_vars, InterpolationError, Settings, VarDefinition,
-    VarType, Vars,
+    evaluate_condition, interpolate, interpolate_strict, predefined_vars, InterpolationError,
+    Settings, VarDefinition, VarType, Vars,
 };
 pub use recipe::{ParseError, Recipe, RecipeFile, RecipeTask, TaskenfileParser, TaskStepDef};
+pub use plugins::{
+    NoopPlugin, PluginContext, PluginRegistry, PluginResult, RunnerPlugin, ShellPlugin,
+};
+pub use rate_limiter::{parse_rate_limit, TokenBucket};
 pub use runners::{AsyncRunner, BackgroundRunner, ShellRunner, SyncRunner, TaskRunner};
 pub use scheduler::{Schedule, ScheduleKind, Scheduler};
 pub use stream_runner::{run_with_streams, StreamResult, StreamRunner};

@@ -1,4 +1,5 @@
-name: cargo-deny
+name: cargo-deny & go-mod check
+
 permissions:
   contents: read
   pull-requests: read
@@ -9,22 +10,32 @@ on:
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'deny.toml'
+      - 'go.mod'
+      - 'go.sum'
+      - '**/go.mod'
+      - '**/go.sum'
   push:
     branches:
       - main
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'deny.toml'
+      - 'go.mod'
+      - 'go.sum'
+      - '**/go.mod'
+      - '**/go.sum'
   schedule:
     - cron: '0 9 * * 1'
-
-
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   cargo-deny:
+    name: cargo-deny
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -37,3 +48,57 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@91bf2b620e09e18d6eb78b92e7861937469acedb # v6
         with:
           rust-version: stable
+
+  gomod-check:
+    name: go mod check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c
+
+      - name: Setup Go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496718a5831 # v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Discover go.mod files
+        id: discover
+        run: |
+          set +e
+          mapfile -t GOMODS < <(find . -type f -name 'go.mod' -not -path './node_modules/*' -not -path './target/*' -not -path './.git/*')
+          if [ ${#GOMODS[@]} -eq 0 ]; then
+            echo "has_gomod=false" >> "$GITHUB_OUTPUT"
+            echo "No go.mod files found in the repository."
+          else
+            echo "has_gomod=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "gomods<<EOF"
+              printf '%s\n' "${GOMODS[@]}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "Found go.mod files:"
+            printf ' - %s\n' "${GOMODS[@]}"
+          fi
+        shell: bash
+
+      - name: Run go mod check on each module
+        if: steps.discover.outputs.has_gomod == 'true'
+        env:
+          GOMODS: ${{ steps.discover.outputs.gomods }}
+        run: |
+          set -e
+          while IFS= read -r mod; do
+            [ -z "$mod" ] && continue
+            dir=$(dirname "$mod")
+            echo "::group::go mod check in $dir"
+            ( cd "$dir" && go mod verify && go mod tidy --diff )
+            echo "::endgroup::"
+          done <<< "$GOMODS"
+        shell: bash
+
+      - name: No Go modules (informational)
+        if: steps.discover.outputs.has_gomod != 'true'
+        run: |
+          echo "Tasken is currently a Rust-first project with no Go modules."
+          echo "This job will activate automatically if a go.mod is introduced."
