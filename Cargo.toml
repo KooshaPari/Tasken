@@ -51,9 +51,25 @@ envy = "0.4"
 toml = "0.8"
 serde_yaml = "0.9"
 
+# Observability (optional, gated by the `otel` feature flag)
+tracing = { version = "0.1", optional = true }
+opentelemetry = { version = "0.24", optional = true }
+
 [dev-dependencies]
 tempfile = "3"
 temp-env = "0.3"
+# Used by infrastructure::otel tests to install a tracing subscriber and
+# capture span field recordings + events. Always present (test-only); the
+# production `otel` feature does NOT require this.
+tracing-subscriber = { version = "0.3", features = ["registry"] }
 
 [features]
 default = []
+# Enable OpenTelemetry-compatible span instrumentation on the
+# `infrastructure::otel` module. When enabled, the `tracing` and
+# `opentelemetry` optional dependencies are activated, and the otel.rs
+# module compiles. The OTel abstraction (OtelSpanExt + TracingOtelSpan)
+# is wired into TaskService::run_task and TaskService::execute_workflow,
+# but the actual exporter (stdout, OTLP, etc.) is left to the embedding
+# application — see `infrastructure::otel::init_tracer` for a stub.
+otel = ["dep:tracing", "dep:opentelemetry"]
