@@ -326,7 +326,13 @@ mod tests {
     fn setup_service() -> TaskService {
         let storage = Arc::new(MemoryStorage::new());
         let queue = Arc::new(MemoryStorage::new());
-        TaskService::new(storage, queue)
+        TaskService::with_cache(
+            storage,
+            queue,
+            Arc::new(crate::infrastructure::PersistentTaskCache::ephemeral(
+                std::time::Duration::from_secs(300),
+            )),
+        )
     }
 
     #[tokio::test]
