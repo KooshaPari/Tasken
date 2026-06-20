@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task entity and related types.
 
 use super::errors::TaskError;

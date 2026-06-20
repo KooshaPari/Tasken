@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! File-based storage adapter for persistence.
 
 use crate::domain::{

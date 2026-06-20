@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // Integration tests for the CLI adapter and library entry points.
 //
 // Covers:
@@ -326,7 +327,7 @@ async fn test_cli_run_command_executes_and_succeeds() {
     let service = setup_service();
     let cmd = CreateTask::new("cli-run").with_command("echo from-cli");
     let task = service.create_task(cmd).await.unwrap();
-    let result = service.run_task(&task.id).await.unwrap();
+    let result = service.run_task(&task.id, false).await.unwrap();
     assert!(result.success);
     let output = result.output.unwrap();
     assert!(output["stdout"].as_str().unwrap().contains("from-cli"));

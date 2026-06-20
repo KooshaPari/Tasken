@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! CLI adapter for command-line interaction.
 
 use crate::application::{
@@ -14,18 +15,27 @@ use std::sync::Arc;
 #[derive(Parser, Debug)]
 #[command(name = "taskkit")]
 #[command(about = "Universal task execution framework")]
+#[command(subcommand_required = false, arg_required_else_help = true)]
 pub struct Cli {
+    /// Print what would be done without executing.
+    #[arg(long, global = true)]
+    pub dry_run: bool,
+    /// Suppress output.
+    #[arg(short = 's', long, global = true)]
+    pub silent: bool,
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
 /// CLI commands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Show task summary (default action when no subcommand is given).
+    Default,
     /// Create a new task.
     Create {
         /// Task name.
-        #[arg(short, long)]
+        #[arg(long)]
         name: String,
         /// Task description.
         #[arg(short, long)]
@@ -107,7 +117,7 @@ pub enum Command {
     /// appended verbatim to the command.
     CreateRaw {
         /// Task name.
-        #[arg(short, long)]
+        #[arg(long)]
         name: String,
         /// Optional task description.
         #[arg(short, long)]
@@ -137,7 +147,7 @@ pub enum Command {
 }
 
 /// Workflow subcommands.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum WorkflowCommand {
     /// Create a new workflow.
     Create {
@@ -213,7 +223,16 @@ pub struct CliAdapter;
 impl CliAdapter {
     /// Run the CLI.
     pub async fn run(service: Arc<TaskService>) -> anyhow::Result<()> {
+        // Auto-load .env file (no error if missing)
+        let _ = dotenvy::dotenv();
+
         let cli = Cli::parse();
+
+        if cli.dry_run {
+            if !cli.silent {
+                eprintln!("[dry-run] would execute command");
+            }
+        }
 
         Self::handle_command(cli, service)
             .await
@@ -223,14 +242,46 @@ impl CliAdapter {
 
     async fn handle_command(cli: Cli, service: Arc<TaskService>) -> anyhow::Result<()> {
         match cli.command {
-            Command::Create {
+            None | Some(Command::Default) => {
+                // Default: show task summary
+                let tasks = service.list_tasks(None, None, None).await?;
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would list {} tasks", tasks.len());
+                    }
+                }
+                if !cli.silent {
+                    let by_state = [
+                        ("pending", TaskState::Pending),
+                        ("running", TaskState::Running),
+                        ("completed", TaskState::Completed),
+                        ("failed", TaskState::Failed),
+                        ("cancelled", TaskState::Cancelled),
+                    ];
+                    for (label, state) in &by_state {
+                        let count = tasks.iter().filter(|t| t.state == *state).count();
+                        println!("  {:>10}: {}", label, count);
+                    }
+                    println!("  {:>10}: {}", "total", tasks.len());
+                }
+            }
+            Some(Command::Create {
                 name,
                 description,
                 priority,
                 timeout,
                 tag,
                 command,
-            } => {
+            }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create task '{}'", name);
+                        if let Some(c) = &command {
+                            eprintln!("[dry-run]   command: {}", c);
+                        }
+                    }
+                    return Ok(());
+                }
                 let priority = Cli::parse_priority(&priority);
 
                 let mut cmd = CreateTask::new(name);
@@ -249,9 +300,11 @@ impl CliAdapter {
                 }
 
                 let task = cmd.execute(&*service).await?;
-                println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                }
             }
-            Command::List { state, tag, limit } => {
+            Some(Command::List { state, tag, limit }) => {
                 let state_filter = state.and_then(|s| Cli::parse_state(&s));
                 let query = ListTasks::new().with_limit(limit);
                 let query = match (state_filter, tag) {
@@ -261,26 +314,48 @@ impl CliAdapter {
                     (None, None) => query,
                 };
                 let tasks = query.execute(&*service).await?;
-                println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
+                }
             }
-            Command::Get { id } => {
+            Some(Command::Get { id }) => {
                 let task = service.get_task(&TaskId::from_string(id.clone())).await?;
                 match task {
-                    Some(t) => println!("{}", serde_json::to_string_pretty(&t).unwrap()),
+                    Some(t) => {
+                        if !cli.silent {
+                            println!("{}", serde_json::to_string_pretty(&t).unwrap());
+                        }
+                    }
                     None => return Err(TaskError::NotFound(id).into()),
                 }
             }
-            Command::Cancel { id, reason } => {
+            Some(Command::Cancel { id, reason }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would cancel task '{}'", id);
+                    }
+                    return Ok(());
+                }
                 let task_id = TaskId::from_string(id);
                 service.cancel_task(task_id, reason).await?;
-                println!("Task cancelled");
+                if !cli.silent {
+                    println!("Task cancelled");
+                }
             }
-            Command::Run { id, args } => {
+            Some(Command::Run { id, args }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would run task '{}'", id);
+                    }
+                    return Ok(());
+                }
                 let task_id = TaskId::from_string(id);
                 if args.is_empty() {
                     // Standard run using the service (with cache)
-                    let result = service.run_task(&task_id).await?;
-                    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                    let result = service.run_task(&task_id, cli.dry_run).await?;
+                    if !cli.silent {
+                        println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                    }
                     if !result.success {
                         std::process::exit(1);
                     }
@@ -299,10 +374,16 @@ impl CliAdapter {
                         .to_string();
                     let composed = compose_command(&base, &forwarded);
                     task.data = serde_json::json!({"command": composed});
-                    crate::domain::run_with_streams(&mut task, true).context("stream execution failed")?;
+                    crate::domain::run_with_streams(&mut task, !cli.silent).context("stream execution failed")?;
                 }
             }
-            Command::RunArgs { id, args } => {
+            Some(Command::RunArgs { id, args }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would run task '{}' with args: {:?}", id, args);
+                    }
+                    return Ok(());
+                }
                 // Argument forwarding: append shell-quoted args to the
                 // existing task command and execute as a one-off run.
                 let task_id = TaskId::from_string(id);
@@ -319,9 +400,9 @@ impl CliAdapter {
                     .to_string();
                 let composed = compose_command(&base, &forwarded);
                 task.data = serde_json::json!({"command": composed});
-                crate::domain::run_with_streams(&mut task, true)?;
+                crate::domain::run_with_streams(&mut task, !cli.silent)?;
             }
-            Command::CreateRaw {
+            Some(Command::CreateRaw {
                 name,
                 description,
                 priority,
@@ -329,7 +410,16 @@ impl CliAdapter {
                 tag,
                 command,
                 args,
-            } => {
+            }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create task '{}'", name);
+                        if let Some(c) = &command {
+                            eprintln!("[dry-run]   command: {}", c);
+                        }
+                    }
+                    return Ok(());
+                }
                 let priority = Cli::parse_priority(&priority);
                 let forwarded = ForwardedArgs::from_slice(&args);
                 let composed = match command {
@@ -348,34 +438,51 @@ impl CliAdapter {
                     cmd = cmd.with_tag(tg);
                 }
                 let task = cmd.execute(&*service).await?;
-                println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                }
             }
-            Command::Workflow { command } => {
-                Self::handle_workflow_command(command, service).await?;
+            Some(Command::Workflow { ref command }) => {
+                Self::handle_workflow_command(&cli, command.clone(), service).await?;
             }
         }
         Ok(())
     }
 
     async fn handle_workflow_command(
+        cli: &Cli,
         command: WorkflowCommand,
         service: Arc<TaskService>,
     ) -> Result<(), TaskError> {
         match command {
             WorkflowCommand::Create { name } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create workflow '{}'", name);
+                    }
+                    return Ok(());
+                }
                 let workflow = Workflow::new(name);
                 let created = service.create_workflow(workflow).await?;
-                println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                }
             }
             WorkflowCommand::List => {
                 let workflows = service.list_workflows().await?;
-                println!("{}", serde_json::to_string_pretty(&workflows).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&workflows).unwrap());
+                }
             }
             WorkflowCommand::Get { id } => {
                 use crate::domain::workflows::WorkflowId;
                 let workflow = service.get_workflow(&WorkflowId::from_string(id.clone())).await?;
                 match workflow {
-                    Some(w) => println!("{}", serde_json::to_string_pretty(&w).unwrap()),
+                    Some(w) => {
+                        if !cli.silent {
+                            println!("{}", serde_json::to_string_pretty(&w).unwrap());
+                        }
+                    }
                     None => return Err(TaskError::NotFound(id)),
                 }
             }
@@ -385,6 +492,12 @@ impl CliAdapter {
                 task_id,
                 depends_on,
             } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would add step '{}' to workflow '{}'", name, workflow_id);
+                    }
+                    return Ok(());
+                }
                 use crate::domain::workflows::WorkflowId;
                 let w_id = WorkflowId::from_string(workflow_id);
                 let mut workflow = service
@@ -397,13 +510,17 @@ impl CliAdapter {
                 }
                 workflow = workflow.with_step(step);
                 let updated = service.create_workflow(workflow).await?;
-                println!("{}", serde_json::to_string_pretty(&updated).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&updated).unwrap());
+                }
             }
             WorkflowCommand::Run { id } => {
                 use crate::domain::workflows::WorkflowId;
                 let w_id = WorkflowId::from_string(id);
-                let results = service.execute_workflow(&w_id).await?;
-                println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                let results = service.execute_workflow(&w_id, cli.dry_run).await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                }
             }
         }
         Ok(())
@@ -449,13 +566,13 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::CreateRaw {
+            Some(Command::CreateRaw {
                 name,
                 priority,
                 command,
                 args,
                 ..
-            } => {
+            }) => {
                 assert_eq!(name, "build");
                 assert_eq!(priority, "high");
                 assert_eq!(command.as_deref(), Some("cargo build"));
@@ -488,7 +605,7 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::RunArgs { id, args } => {
+            Some(Command::RunArgs { id, args }) => {
                 assert_eq!(id, "abc-123");
                 assert_eq!(
                     args,
@@ -516,7 +633,7 @@ mod tests {
         ])
         .expect("parse should succeed");
         match cli.command {
-            Command::CreateRaw { command, args, .. } => {
+            Some(Command::CreateRaw { command, args, .. }) => {
                 assert!(command.is_none());
                 assert_eq!(args, vec!["echo".to_string(), "hello world".to_string()]);
             }
@@ -544,7 +661,7 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::Run { id, args } => {
+            Some(Command::Run { id, args }) => {
                 assert_eq!(id, "abc-123");
                 assert_eq!(
                     args,
@@ -569,7 +686,7 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::Run { id, args } => {
+            Some(Command::Run { id, args }) => {
                 assert_eq!(id, "abc-123");
                 assert!(args.is_empty());
             }

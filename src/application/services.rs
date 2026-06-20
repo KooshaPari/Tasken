@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task application service.
 
 use super::commands::CreateTask;
+use crate::config::TaskenConfig;
 use crate::domain::errors::TaskError;
 use crate::domain::ports::{QueuePort, StoragePort};
 use crate::domain::runners::{ShellRunner, TaskRunner};
@@ -19,20 +21,34 @@ pub struct TaskService {
 }
 
 impl TaskService {
-    /// Create a new task service with a disk-backed cache at ~/.taskkit/cache.json.
+    /// Create a new task service with default configuration.
     pub fn new(storage: Arc<dyn StoragePort>, queue: Arc<dyn QueuePort>) -> Self {
-        let cache_path = dirs::home_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join(".taskkit")
-            .join("cache.json");
+        let config = TaskenConfig::default();
+        Self::with_config(storage, queue, &config)
+    }
+
+    /// Create a new task service using the given configuration.
+    ///
+    /// The cache path and TTL are derived from `config`.
+    pub fn with_config(
+        storage: Arc<dyn StoragePort>,
+        queue: Arc<dyn QueuePort>,
+        config: &TaskenConfig,
+    ) -> Self {
+        let cache_path = config.cache_path();
+        let cache_ttl = config.cache_ttl();
+
+        // Ensure cache parent directory exists
+        if let Some(parent) = cache_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
         let cache = crate::infrastructure::PersistentTaskCache::open(
             &cache_path,
-            std::time::Duration::from_secs(300),
+            cache_ttl,
         )
         .unwrap_or_else(|_| {
-            crate::infrastructure::PersistentTaskCache::ephemeral(
-                std::time::Duration::from_secs(300),
-            )
+            crate::infrastructure::PersistentTaskCache::ephemeral(cache_ttl)
         });
         Self {
             storage,
@@ -191,18 +207,47 @@ impl TaskService {
     }
 
     /// Run a task synchronously using the shell runner with disk-backed cache.
-    pub async fn run_task(&self, task_id: &TaskId) -> Result<TaskResult, TaskError> {
+    ///
+    /// When `dry_run` is `true`, the task command is printed to stderr
+    /// and no side effects (shell execution, storage writes, caching)
+    /// are performed. A simulated successful result is returned.
+    pub async fn run_task(
+        &self,
+        task_id: &TaskId,
+        dry_run: bool,
+    ) -> Result<TaskResult, TaskError> {
         // Check cache first (disk-backed persistent cache)
-        if let Some(cached) = self.cache.get(task_id) {
-            return Ok(cached);
+        if !dry_run {
+            if let Some(cached) = self.cache.get(task_id) {
+                return Ok(cached);
+            }
         }
 
-        let mut task = self
+        let task = self
             .storage
             .load_task(&task_id.0)
             .await?
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
+        if dry_run {
+            let cmd = task
+                .data
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            eprintln!("[dry-run] would run task '{}'", task_id.0);
+            eprintln!("[dry-run]   command: {}", cmd);
+            return Ok(TaskResult {
+                task_id: task_id.clone(),
+                success: true,
+                output: None,
+                error: None,
+                duration: std::time::Duration::ZERO,
+                timestamp: chrono::Utc::now(),
+            });
+        }
+
+        let mut task = task;
         let runner = ShellRunner::new();
         let result = runner.execute(&mut task)?;
 
@@ -247,7 +292,14 @@ impl TaskService {
     ///
     /// Steps whose dependencies are all satisfied run concurrently in each wave.
     /// Waves advance as steps complete, respecting the DAG's partial order.
-    pub async fn execute_workflow(&self, workflow_id: &WorkflowId) -> Result<Vec<TaskResult>, TaskError> {
+    ///
+    /// When `dry_run` is `true`, each step's command is printed to stderr
+    /// instead of being executed (passed through to [`Self::run_task`]).
+    pub async fn execute_workflow(
+        &self,
+        workflow_id: &WorkflowId,
+        dry_run: bool,
+    ) -> Result<Vec<TaskResult>, TaskError> {
         let mut workflow = self
             .storage
             .load_workflow(&workflow_id.0)
@@ -279,7 +331,7 @@ impl TaskService {
             // Launch all ready steps concurrently.
             let wave_futures: Vec<_> = ready
                 .iter()
-                .filter_map(|step| step.task_id.as_ref().map(|tid| self.run_task(tid)))
+                .filter_map(|step| step.task_id.as_ref().map(|tid| self.run_task(tid, dry_run)))
                 .collect();
 
             let wave_results = futures::future::try_join_all(wave_futures).await?;
@@ -432,7 +484,7 @@ mod tests {
         let cmd = CreateTask::new("run-test").with_command("echo hello");
         let task = service.create_task(cmd).await.unwrap();
 
-        let result = service.run_task(&task.id).await.unwrap();
+        let result = service.run_task(&task.id, false).await.unwrap();
         assert!(result.success);
         let output = result.output.unwrap();
         assert!(output.get("stdout").unwrap().as_str().unwrap().contains("hello"));
@@ -441,7 +493,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_task_not_found() {
         let service = setup_service();
-        let result = service.run_task(&TaskId::from_string("missing")).await;
+        let result = service.run_task(&TaskId::from_string("missing"), false).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -464,11 +516,11 @@ mod tests {
         let task = service.create_task(cmd).await.unwrap();
 
         // First run should execute
-        let result1 = service.run_task(&task.id).await.unwrap();
+        let result1 = service.run_task(&task.id, false).await.unwrap();
         assert!(result1.success);
 
         // Second run should return cached result
-        let result2 = service.run_task(&task.id).await.unwrap();
+        let result2 = service.run_task(&task.id, false).await.unwrap();
         assert!(result2.success);
         // Should be the same result (cached)
         assert_eq!(result1.timestamp, result2.timestamp);
@@ -480,11 +532,11 @@ mod tests {
         let cmd = CreateTask::new("fail-cache").with_command("false");
         let task = service.create_task(cmd).await.unwrap();
 
-        let result1 = service.run_task(&task.id).await.unwrap();
+        let result1 = service.run_task(&task.id, false).await.unwrap();
         assert!(!result1.success);
 
         // Failure should not be cached
-        let result2 = service.run_task(&task.id).await.unwrap();
+        let result2 = service.run_task(&task.id, false).await.unwrap();
         assert!(!result2.success);
         // Timestamps should differ since it re-ran
         assert_ne!(result1.timestamp, result2.timestamp);
@@ -504,7 +556,7 @@ mod tests {
             .with_step(WorkflowStep::new("step-b").with_task(task_b.id.clone()).with_dependency("step-a"));
 
         let created = service.create_workflow(workflow).await.unwrap();
-        let results = service.execute_workflow(&created.id).await.unwrap();
+        let results = service.execute_workflow(&created.id, false).await.unwrap();
 
         assert_eq!(results.len(), 2);
         assert!(results[0].success);
@@ -596,7 +648,7 @@ mod tests {
             );
 
         let created = service.create_workflow(workflow).await.unwrap();
-        let results = service.execute_workflow(&created.id).await.unwrap();
+        let results = service.execute_workflow(&created.id, false).await.unwrap();
 
         // All four tasks must succeed.
         assert_eq!(results.len(), 4);
@@ -620,7 +672,7 @@ mod tests {
             .with_step(WorkflowStep::new("d").with_task(task_d.id.clone()).with_dependency("a"));
 
         let created = service.create_workflow(workflow).await.unwrap();
-        let results = service.execute_workflow(&created.id).await.unwrap();
+        let results = service.execute_workflow(&created.id, false).await.unwrap();
 
         assert_eq!(results.len(), 4);
         assert!(results.iter().all(|r| r.success));
@@ -650,7 +702,7 @@ mod tests {
         // but ready_steps will never return "bad" because "nonexistent-step" is never completed.
         // This exercises the stall-detection branch.
         let created = service.create_workflow(workflow).await.unwrap();
-        let err = service.execute_workflow(&created.id).await.unwrap_err();
+        let err = service.execute_workflow(&created.id, false).await.unwrap_err();
         assert!(
             matches!(err, TaskError::InvalidOperation(_)),
             "expected InvalidOperation stall error, got: {err:?}"

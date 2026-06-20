@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Port definitions - interfaces for external dependencies.
 
 use super::errors::PortError;

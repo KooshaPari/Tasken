@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Domain layer - pure business logic with no external dependencies.
 //!
 //! This layer contains:

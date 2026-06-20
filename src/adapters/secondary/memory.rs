@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! In-memory storage adapter.
 
 use crate::domain::{

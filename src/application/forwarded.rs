@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Argument forwarding utilities for CLI invocations.
 //!
 //! Provides support for the standard Unix convention where everything

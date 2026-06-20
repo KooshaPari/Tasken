@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Domain events for event sourcing.
 
 use super::tasks::TaskId;

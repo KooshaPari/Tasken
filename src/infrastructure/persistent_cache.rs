@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Disk-backed persistent cache for task results.
 //!
 //! Stores cached task results in a JSON file at a configurable path
@@ -239,7 +240,9 @@ impl PersistentTaskCache {
 
 impl Default for PersistentTaskCache {
     fn default() -> Self {
-        Self::ephemeral(Duration::from_secs(300))
+        // Use the config's default TTL for consistency.
+        let default_ttl = crate::config::TaskenConfig::default().cache_ttl();
+        Self::ephemeral(default_ttl)
     }
 }
 

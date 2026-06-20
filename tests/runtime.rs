@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // Integration tests for the runtime modules:
 //   - src/domain/scheduler.rs
 //   - src/infrastructure/cache.rs
@@ -231,7 +232,7 @@ async fn test_service_with_cache_uses_provided_cache() {
 
     let cmd = CreateTask::new("custom-cache").with_command("echo hi");
     let task = service.create_task(cmd).await.unwrap();
-    let result = service.run_task(&task.id).await.unwrap();
+    let result = service.run_task(&task.id, false).await.unwrap();
     assert!(result.success);
 }
 
@@ -273,7 +274,7 @@ async fn test_service_retry_limit_exceeded() {
         .with_command("echo hello")
         .with_retry_policy(policy);
     let task = service.create_task(cmd).await.unwrap();
-    let result = service.run_task(&task.id).await.unwrap();
+    let result = service.run_task(&task.id, false).await.unwrap();
     assert!(result.success);
 
     // Retry after success is an error (invalid state transition)

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task execution framework with scheduling and workflow orchestration.
 //!
 //! # Architecture
@@ -22,12 +23,14 @@
 
 pub mod adapters;
 pub mod application;
+pub mod config;
 pub mod cron_parser;
 pub mod domain;
 pub mod infrastructure;
 
 // Re-exports for convenience
 pub use application::services::TaskService;
+pub use config::TaskenConfig;
 pub use domain::errors::TaskError;
 pub use domain::{
     Schedule, Scheduler, Task, TaskResult, TaskRunner, TaskState, Workflow,
