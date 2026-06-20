@@ -36,6 +36,8 @@ pub use domain::{
     Schedule, Scheduler, Task, TaskResult, TaskRunner, TaskState, Workflow,
 };
 pub use domain::tasks::{Priority, RetryPolicy, TaskId};
+pub use domain::groups::{Group, GroupId};
+pub use domain::recipes::{interpolate, interpolate_strict, predefined_vars, Settings, VarDefinition, VarType, Vars};
 pub use domain::runners::{AsyncRunner, BackgroundRunner, SyncRunner};
 pub use infrastructure::{TaskCache, TaskKitError};
 

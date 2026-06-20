@@ -3,6 +3,7 @@
 
 pub mod commands;
 pub mod forwarded;
+pub mod import;
 pub mod queries;
 pub mod services;
 

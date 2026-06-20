@@ -8,7 +8,7 @@ use crate::domain::ports::{QueuePort, StoragePort};
 use crate::domain::runners::{ShellRunner, TaskRunner};
 use crate::domain::tasks::{Task, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowId};
-use crate::domain::{events::TaskEvent, TaskResult};
+use crate::domain::{events::TaskEvent, Group, GroupId, TaskResult};
 use chrono::Utc;
 use std::sync::Arc;
 
@@ -270,6 +270,41 @@ impl TaskService {
     pub async fn save_task(&self, task: &Task) -> Result<(), TaskError> {
         self.storage.save_task(task).await?;
         Ok(())
+    }
+
+    /// Create a group.
+    pub async fn create_group(&self, group: Group) -> Result<Group, TaskError> {
+        self.storage.save_group(&group).await?;
+        Ok(group)
+    }
+
+    /// Get a group by ID.
+    pub async fn get_group(&self, id: &GroupId) -> Result<Option<Group>, TaskError> {
+        self.storage.load_group(&id.0).await.map_err(Into::into)
+    }
+
+    /// List all groups.
+    pub async fn list_groups(&self) -> Result<Vec<Group>, TaskError> {
+        self.storage.list_groups().await.map_err(Into::into)
+    }
+
+    /// Run all tasks in a group.
+    ///
+    /// Loads each task referenced by the group and runs it sequentially.
+    /// Returns the aggregate results in task order.
+    pub async fn run_group(&self, group_id: &GroupId, dry_run: bool) -> Result<Vec<TaskResult>, TaskError> {
+        let group = self
+            .storage
+            .load_group(&group_id.0)
+            .await?
+            .ok_or_else(|| TaskError::NotFound(group_id.0.clone()))?;
+
+        let mut results = Vec::with_capacity(group.task_ids.len());
+        for task_id in &group.task_ids {
+            let result = self.run_task(task_id, dry_run).await?;
+            results.push(result);
+        }
+        Ok(results)
     }
 
     /// Create a workflow.

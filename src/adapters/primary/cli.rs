@@ -5,6 +5,7 @@ use crate::application::{
     compose_command, CreateTask, ForwardedArgs, ListTasks, TaskService,
 };
 use crate::domain::errors::TaskError;
+use crate::domain::groups::Group;
 use crate::domain::tasks::{Priority, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowStep};
 use anyhow::{Context, Result};
@@ -144,6 +145,11 @@ pub enum Command {
         #[command(subcommand)]
         command: WorkflowCommand,
     },
+    /// Group commands.
+    Group {
+        #[command(subcommand)]
+        command: GroupCommand,
+    },
 }
 
 /// Workflow subcommands.
@@ -183,6 +189,31 @@ pub enum WorkflowCommand {
         /// Workflow ID.
         #[arg(short, long)]
         id: String,
+    },
+}
+
+/// Group subcommands.
+#[derive(Subcommand, Debug, Clone)]
+pub enum GroupCommand {
+    /// Create a new group.
+    Create {
+        /// Group name.
+        name: String,
+        /// Optional description.
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// List all groups.
+    List,
+    /// Show group details.
+    Show {
+        /// Group name.
+        name: String,
+    },
+    /// Run all tasks in a group.
+    Run {
+        /// Group name.
+        name: String,
     },
 }
 
@@ -445,6 +476,9 @@ impl CliAdapter {
             Some(Command::Workflow { ref command }) => {
                 Self::handle_workflow_command(&cli, command.clone(), service).await?;
             }
+            Some(Command::Group { ref command }) => {
+                Self::handle_group_command(&cli, command.clone(), service).await?;
+            }
         }
         Ok(())
     }
@@ -518,6 +552,67 @@ impl CliAdapter {
                 use crate::domain::workflows::WorkflowId;
                 let w_id = WorkflowId::from_string(id);
                 let results = service.execute_workflow(&w_id, cli.dry_run).await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn handle_group_command(
+        cli: &Cli,
+        command: GroupCommand,
+        service: Arc<TaskService>,
+    ) -> Result<(), TaskError> {
+        match command {
+            GroupCommand::Create { name, description } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create group '{}'", name);
+                    }
+                    return Ok(());
+                }
+                let mut group = Group::new(name);
+                if let Some(desc) = description {
+                    group = group.with_description(desc);
+                }
+                let created = service.create_group(group).await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                }
+            }
+            GroupCommand::List => {
+                let groups = service.list_groups().await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&groups).unwrap());
+                }
+            }
+            GroupCommand::Show { name } => {
+                // Look up by name: find in the list, then show details.
+                let groups = service.list_groups().await?;
+                let group = groups
+                    .into_iter()
+                    .find(|g| g.name == name)
+                    .ok_or_else(|| TaskError::NotFound(name.clone()))?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&group).unwrap());
+                }
+            }
+            GroupCommand::Run { name } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would run group '{}'", name);
+                    }
+                    return Ok(());
+                }
+                // Look up by name.
+                let groups = service.list_groups().await?;
+                let group = groups
+                    .into_iter()
+                    .find(|g| g.name == name)
+                    .ok_or_else(|| TaskError::NotFound(name.clone()))?;
+                let results = service.run_group(&group.id, cli.dry_run).await?;
                 if !cli.silent {
                     println!("{}", serde_json::to_string_pretty(&results).unwrap());
                 }

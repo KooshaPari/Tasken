@@ -10,7 +10,10 @@
 
 pub mod errors;
 pub mod events;
+pub mod groups;
 pub mod ports;
+pub mod recipe;
+pub mod recipes;
 pub mod runners;
 pub mod scheduler;
 pub mod stream_runner;
@@ -21,7 +24,13 @@ pub mod workflows;
 pub use errors::TaskError;
 pub use errors::PortError;
 pub use events::{TaskEvent, TaskEventKind};
+pub use groups::{Group, GroupId};
 pub use ports::{NotificationPort, QueuePort, StoragePort, TaskPort};
+pub use recipes::{
+    interpolate, interpolate_strict, predefined_vars, InterpolationError, Settings, VarDefinition,
+    VarType, Vars,
+};
+pub use recipe::{ParseError, Recipe, RecipeFile, RecipeTask, TaskenfileParser, TaskStepDef};
 pub use runners::{AsyncRunner, BackgroundRunner, ShellRunner, SyncRunner, TaskRunner};
 pub use scheduler::{Schedule, ScheduleKind, Scheduler};
 pub use stream_runner::{run_with_streams, StreamResult, StreamRunner};
