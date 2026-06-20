@@ -177,3 +177,7 @@ This repository includes the following cross-cutting documents:
 - [`SPEC.md`](SPEC.md) — formal specification of behavior and contracts
 - [`docs/`](docs/) — design notes, ADRs, and supporting documentation (see [`docs/index.md`](docs/index.md))
 
+
+## Absorbed phenoForge contract
+
+phenoForge build-orchestrator research and product intent is preserved under docs/history/archived-repos/phenoForge/. Tasken remains the canonical active task orchestration product; phenoForge material is historical input for build-runner, DAG, caching, plugin, and remote execution requirements.
