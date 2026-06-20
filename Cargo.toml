@@ -30,6 +30,11 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+dotenvy = "0.15"
+libc = "0.2"
+
+# File system watching
+notify = { version = "8", features = ["macos_kqueue"] }
 
 # Error handling
 thiserror = "2.0"
@@ -39,8 +44,32 @@ anyhow = "1.0"
 uuid = { version = "1", features = ["v4", "serde"] }
 dirs = "6"
 
+# Configuration
+envy = "0.4"
+
+# Parsing
+toml = "0.8"
+serde_yaml = "0.9"
+
+# Observability (optional, gated by the `otel` feature flag)
+tracing = { version = "0.1", optional = true }
+opentelemetry = { version = "0.24", optional = true }
+
 [dev-dependencies]
 tempfile = "3"
+temp-env = "0.3"
+# Used by infrastructure::otel tests to install a tracing subscriber and
+# capture span field recordings + events. Always present (test-only); the
+# production `otel` feature does NOT require this.
+tracing-subscriber = { version = "0.3", features = ["registry"] }
 
 [features]
 default = []
+# Enable OpenTelemetry-compatible span instrumentation on the
+# `infrastructure::otel` module. When enabled, the `tracing` and
+# `opentelemetry` optional dependencies are activated, and the otel.rs
+# module compiles. The OTel abstraction (OtelSpanExt + TracingOtelSpan)
+# is wired into TaskService::run_task and TaskService::execute_workflow,
+# but the actual exporter (stdout, OTLP, etc.) is left to the embedding
+# application — see `infrastructure::otel::init_tracer` for a stub.
+otel = ["dep:tracing", "dep:opentelemetry"]

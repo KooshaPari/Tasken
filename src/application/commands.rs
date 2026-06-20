@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task command definitions.
 
 use super::super::domain::errors::TaskError;

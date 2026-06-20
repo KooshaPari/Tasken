@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Port definitions - interfaces for external dependencies.
 
 use super::errors::PortError;
-use super::{Schedule, Task, TaskResult, Workflow};
+use super::{Group, Schedule, Task, TaskResult, Workflow};
 use async_trait::async_trait;
 
 /// Port for task storage operations.
@@ -36,6 +37,18 @@ pub trait StoragePort: Send + Sync {
 
     /// List all schedules.
     async fn list_schedules(&self) -> Result<Vec<Schedule>, PortError>;
+
+    /// Save a group.
+    async fn save_group(&self, group: &Group) -> Result<(), PortError>;
+
+    /// Load a group by ID.
+    async fn load_group(&self, id: &str) -> Result<Option<Group>, PortError>;
+
+    /// List all groups.
+    async fn list_groups(&self) -> Result<Vec<Group>, PortError>;
+
+    /// Delete a group.
+    async fn delete_group(&self, id: &str) -> Result<(), PortError>;
 }
 
 /// Port for task queue operations.

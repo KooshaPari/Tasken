@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // Integration tests for the W3b production cron expression parser
 // (src/cron_parser.rs). This file complements the existing
 // `#[cfg(test)] mod tests` block in the source itself and exercises

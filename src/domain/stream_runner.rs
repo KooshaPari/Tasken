@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Strict stdout/stderr separation for shell task execution.
 //!
 //! Standard POSIX practice: a process has two distinct output streams,
@@ -286,12 +287,12 @@ pub fn run_with_streams(task: &mut Task, print_result: bool) -> Result<StreamRes
     if print_result {
         // Route stdout (the data stream) to the caller's stdout as JSON.
         println!("{}", serde_json::to_string_pretty(&strict.to_json()).unwrap());
-        // Route stderr (the diagnostic stream) verbatim to the caller's
-        // stderr. This preserves stream separation: even though we're
-        // capturing them separately, we surface each on its own fd.
-        if strict.has_stderr() {
-            eprint!("{}", strict.stderr_str());
-        }
+    }
+    // Always route stderr (the diagnostic stream) verbatim to the caller's
+    // stderr. This preserves stream separation even in silent mode:
+    // errors are always visible, only the result JSON is suppressed.
+    if strict.has_stderr() {
+        eprint!("{}", strict.stderr_str());
     }
 
     Ok(strict)

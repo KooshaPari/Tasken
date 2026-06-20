@@ -1,9 +1,13 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! CLI adapter for command-line interaction.
 
 use crate::application::{
-    compose_command, CreateTask, ForwardedArgs, ListTasks, TaskService,
+    compose_command, watcher::FileWatcher, CreateTask, ForwardedArgs, ListTasks, TaskService,
 };
+use crate::domain::rate_limiter::{parse_rate_limit, TokenBucket};
+use crate::application::visualize::{generate_dot, generate_mermaid, GraphFormat};
 use crate::domain::errors::TaskError;
+use crate::domain::groups::Group;
 use crate::domain::tasks::{Priority, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowStep};
 use anyhow::{Context, Result};
@@ -14,18 +18,34 @@ use std::sync::Arc;
 #[derive(Parser, Debug)]
 #[command(name = "taskkit")]
 #[command(about = "Universal task execution framework")]
+#[command(subcommand_required = false, arg_required_else_help = true)]
 pub struct Cli {
+    /// Print what would be done without executing.
+    #[arg(long, global = true)]
+    pub dry_run: bool,
+    /// Suppress output.
+    #[arg(short = 's', long, global = true)]
+    pub silent: bool,
+    /// Maximum number of tasks that can run concurrently (rate limiter capacity).
+    #[arg(long, global = true, default_value = "0")]
+    pub max_concurrency: u64,
+    /// Rate limit for dispatch, e.g. "10/s", "60/m", "3600/h".
+    /// When set, task execution will be throttled to this rate.
+    #[arg(long, global = true)]
+    pub rate_limit: Option<String>,
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
 /// CLI commands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Show task summary (default action when no subcommand is given).
+    Default,
     /// Create a new task.
     Create {
         /// Task name.
-        #[arg(short, long)]
+        #[arg(long)]
         name: String,
         /// Task description.
         #[arg(short, long)]
@@ -107,7 +127,7 @@ pub enum Command {
     /// appended verbatim to the command.
     CreateRaw {
         /// Task name.
-        #[arg(short, long)]
+        #[arg(long)]
         name: String,
         /// Optional task description.
         #[arg(short, long)]
@@ -134,10 +154,32 @@ pub enum Command {
         #[command(subcommand)]
         command: WorkflowCommand,
     },
+    /// Group commands.
+    Group {
+        #[command(subcommand)]
+        command: GroupCommand,
+    },
+    /// Watch a directory for changes and re-run the default action.
+    Watch {
+        /// Path to watch (file or directory).
+        #[arg(short, long, default_value = ".")]
+        path: String,
+        /// Debounce interval in milliseconds.
+        #[arg(short, long, default_value = "500")]
+        debounce_ms: u64,
+    },
+    /// Generate a dependency graph from a recipe file.
+    Graph {
+        /// Path to the recipe file (TOML or YAML).
+        recipe_file: String,
+        /// Output format: dot or mermaid (default: dot).
+        #[arg(long, default_value = "dot")]
+        format: String,
+    },
 }
 
 /// Workflow subcommands.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum WorkflowCommand {
     /// Create a new workflow.
     Create {
@@ -173,6 +215,31 @@ pub enum WorkflowCommand {
         /// Workflow ID.
         #[arg(short, long)]
         id: String,
+    },
+}
+
+/// Group subcommands.
+#[derive(Subcommand, Debug, Clone)]
+pub enum GroupCommand {
+    /// Create a new group.
+    Create {
+        /// Group name.
+        name: String,
+        /// Optional description.
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// List all groups.
+    List,
+    /// Show group details.
+    Show {
+        /// Group name.
+        name: String,
+    },
+    /// Run all tasks in a group.
+    Run {
+        /// Group name.
+        name: String,
     },
 }
 
@@ -213,7 +280,47 @@ pub struct CliAdapter;
 impl CliAdapter {
     /// Run the CLI.
     pub async fn run(service: Arc<TaskService>) -> anyhow::Result<()> {
+        // Auto-load .env file (no error if missing)
+        let _ = dotenvy::dotenv();
+
         let cli = Cli::parse();
+
+        if cli.dry_run {
+            if !cli.silent {
+                eprintln!("[dry-run] would execute command");
+            }
+        }
+
+        // Attach rate limiter to service if --rate-limit or --max-concurrency is set.
+        if cli.rate_limit.is_some() || cli.max_concurrency > 0 {
+            // Resolve capacity: use --max-concurrency if explicitly set (>0),
+            // otherwise fall back to a sensible default derived from the rate limit.
+            let capacity = if cli.max_concurrency > 0 {
+                cli.max_concurrency
+            } else {
+                // Default capacity = rate_limit (rounded up), min 1.
+                if let Some(ref rl) = cli.rate_limit {
+                    parse_rate_limit(rl)
+                        .map(|r| (r.ceil() as u64).max(1))
+                        .unwrap_or(10)
+                } else {
+                    10
+                }
+            };
+
+            let refill_rate = cli
+                .rate_limit
+                .as_ref()
+                .and_then(|rl| parse_rate_limit(rl))
+                .unwrap_or(10.0);
+
+            let bucket = TokenBucket::new(capacity, refill_rate, None);
+            service.set_rate_limiter(bucket).await;
+
+            if !cli.silent && capacity > 0 {
+                eprintln!("[rate-limiter] capacity={capacity}, rate={refill_rate}/s");
+            }
+        }
 
         Self::handle_command(cli, service)
             .await
@@ -223,14 +330,46 @@ impl CliAdapter {
 
     async fn handle_command(cli: Cli, service: Arc<TaskService>) -> anyhow::Result<()> {
         match cli.command {
-            Command::Create {
+            None | Some(Command::Default) => {
+                // Default: show task summary
+                let tasks = service.list_tasks(None, None, None).await?;
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would list {} tasks", tasks.len());
+                    }
+                }
+                if !cli.silent {
+                    let by_state = [
+                        ("pending", TaskState::Pending),
+                        ("running", TaskState::Running),
+                        ("completed", TaskState::Completed),
+                        ("failed", TaskState::Failed),
+                        ("cancelled", TaskState::Cancelled),
+                    ];
+                    for (label, state) in &by_state {
+                        let count = tasks.iter().filter(|t| t.state == *state).count();
+                        println!("  {:>10}: {}", label, count);
+                    }
+                    println!("  {:>10}: {}", "total", tasks.len());
+                }
+            }
+            Some(Command::Create {
                 name,
                 description,
                 priority,
                 timeout,
                 tag,
                 command,
-            } => {
+            }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create task '{}'", name);
+                        if let Some(c) = &command {
+                            eprintln!("[dry-run]   command: {}", c);
+                        }
+                    }
+                    return Ok(());
+                }
                 let priority = Cli::parse_priority(&priority);
 
                 let mut cmd = CreateTask::new(name);
@@ -249,9 +388,11 @@ impl CliAdapter {
                 }
 
                 let task = cmd.execute(&*service).await?;
-                println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                }
             }
-            Command::List { state, tag, limit } => {
+            Some(Command::List { state, tag, limit }) => {
                 let state_filter = state.and_then(|s| Cli::parse_state(&s));
                 let query = ListTasks::new().with_limit(limit);
                 let query = match (state_filter, tag) {
@@ -261,26 +402,48 @@ impl CliAdapter {
                     (None, None) => query,
                 };
                 let tasks = query.execute(&*service).await?;
-                println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
+                }
             }
-            Command::Get { id } => {
+            Some(Command::Get { id }) => {
                 let task = service.get_task(&TaskId::from_string(id.clone())).await?;
                 match task {
-                    Some(t) => println!("{}", serde_json::to_string_pretty(&t).unwrap()),
+                    Some(t) => {
+                        if !cli.silent {
+                            println!("{}", serde_json::to_string_pretty(&t).unwrap());
+                        }
+                    }
                     None => return Err(TaskError::NotFound(id).into()),
                 }
             }
-            Command::Cancel { id, reason } => {
+            Some(Command::Cancel { id, reason }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would cancel task '{}'", id);
+                    }
+                    return Ok(());
+                }
                 let task_id = TaskId::from_string(id);
                 service.cancel_task(task_id, reason).await?;
-                println!("Task cancelled");
+                if !cli.silent {
+                    println!("Task cancelled");
+                }
             }
-            Command::Run { id, args } => {
+            Some(Command::Run { id, args }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would run task '{}'", id);
+                    }
+                    return Ok(());
+                }
                 let task_id = TaskId::from_string(id);
                 if args.is_empty() {
                     // Standard run using the service (with cache)
-                    let result = service.run_task(&task_id).await?;
-                    println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                    let result = service.run_task(&task_id, cli.dry_run).await?;
+                    if !cli.silent {
+                        println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                    }
                     if !result.success {
                         std::process::exit(1);
                     }
@@ -299,10 +462,16 @@ impl CliAdapter {
                         .to_string();
                     let composed = compose_command(&base, &forwarded);
                     task.data = serde_json::json!({"command": composed});
-                    crate::domain::run_with_streams(&mut task, true).context("stream execution failed")?;
+                    crate::domain::run_with_streams(&mut task, !cli.silent).context("stream execution failed")?;
                 }
             }
-            Command::RunArgs { id, args } => {
+            Some(Command::RunArgs { id, args }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would run task '{}' with args: {:?}", id, args);
+                    }
+                    return Ok(());
+                }
                 // Argument forwarding: append shell-quoted args to the
                 // existing task command and execute as a one-off run.
                 let task_id = TaskId::from_string(id);
@@ -319,9 +488,9 @@ impl CliAdapter {
                     .to_string();
                 let composed = compose_command(&base, &forwarded);
                 task.data = serde_json::json!({"command": composed});
-                crate::domain::run_with_streams(&mut task, true)?;
+                crate::domain::run_with_streams(&mut task, !cli.silent)?;
             }
-            Command::CreateRaw {
+            Some(Command::CreateRaw {
                 name,
                 description,
                 priority,
@@ -329,7 +498,16 @@ impl CliAdapter {
                 tag,
                 command,
                 args,
-            } => {
+            }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create task '{}'", name);
+                        if let Some(c) = &command {
+                            eprintln!("[dry-run]   command: {}", c);
+                        }
+                    }
+                    return Ok(());
+                }
                 let priority = Cli::parse_priority(&priority);
                 let forwarded = ForwardedArgs::from_slice(&args);
                 let composed = match command {
@@ -348,34 +526,106 @@ impl CliAdapter {
                     cmd = cmd.with_tag(tg);
                 }
                 let task = cmd.execute(&*service).await?;
-                println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                }
             }
-            Command::Workflow { command } => {
-                Self::handle_workflow_command(command, service).await?;
+            Some(Command::Workflow { ref command }) => {
+                Self::handle_workflow_command(&cli, command.clone(), service).await?;
+            }
+            Some(Command::Watch { path, debounce_ms }) => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would watch path '{}'", path);
+                    }
+                    return Ok(());
+                }
+                let watch_path = std::path::PathBuf::from(&path);
+                let watcher = FileWatcher::new().with_debounce(debounce_ms);
+                let svc = service.clone();
+                watcher
+                    .watch_and_run(&watch_path, move || {
+                        let rt = tokio::runtime::Runtime::new().expect("failed to create runtime for watcher callback");
+                        rt.block_on(async {
+                            let tasks = svc.list_tasks(None, None, None).await;
+                            match tasks {
+                                Ok(tasks) => {
+                                    let by_state = [
+                                        ("pending", crate::domain::tasks::TaskState::Pending),
+                                        ("running", crate::domain::tasks::TaskState::Running),
+                                        ("completed", crate::domain::tasks::TaskState::Completed),
+                                        ("failed", crate::domain::tasks::TaskState::Failed),
+                                        ("cancelled", crate::domain::tasks::TaskState::Cancelled),
+                                    ];
+                                    for (label, state) in &by_state {
+                                        let count = tasks.iter().filter(|t| t.state == *state).count();
+                                        println!("  {:>10}: {}", label, count);
+                                    }
+                                    println!("  {:>10}: {}", "total", tasks.len());
+                                }
+                                Err(e) => eprintln!("[watcher] failed to list tasks: {e}"),
+                            }
+                        });
+                    })
+                    .map_err(|e| anyhow::anyhow!("file watcher error: {e}"))?;
+            }
+            Some(Command::Graph { recipe_file, format }) => {
+                let fmt: GraphFormat = format
+                    .parse()
+                    .map_err(|e: String| anyhow::anyhow!(e))
+                    .context("Invalid graph format")?;
+                let path = std::path::Path::new(&recipe_file);
+                let recipe = crate::domain::recipe::TaskenfileParser::parse_file(path)
+                    .context("Failed to parse recipe file")?;
+                let output = match fmt {
+                    GraphFormat::Dot => generate_dot(&recipe.tasks),
+                    GraphFormat::Mermaid => generate_mermaid(&recipe.tasks),
+                };
+                if !cli.silent {
+                    print!("{output}");
+                }
+            }
+            Some(Command::Group { ref command }) => {
+                Self::handle_group_command(&cli, command.clone(), service).await?;
             }
         }
         Ok(())
     }
 
     async fn handle_workflow_command(
+        cli: &Cli,
         command: WorkflowCommand,
         service: Arc<TaskService>,
     ) -> Result<(), TaskError> {
         match command {
             WorkflowCommand::Create { name } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create workflow '{}'", name);
+                    }
+                    return Ok(());
+                }
                 let workflow = Workflow::new(name);
                 let created = service.create_workflow(workflow).await?;
-                println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                }
             }
             WorkflowCommand::List => {
                 let workflows = service.list_workflows().await?;
-                println!("{}", serde_json::to_string_pretty(&workflows).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&workflows).unwrap());
+                }
             }
             WorkflowCommand::Get { id } => {
                 use crate::domain::workflows::WorkflowId;
                 let workflow = service.get_workflow(&WorkflowId::from_string(id.clone())).await?;
                 match workflow {
-                    Some(w) => println!("{}", serde_json::to_string_pretty(&w).unwrap()),
+                    Some(w) => {
+                        if !cli.silent {
+                            println!("{}", serde_json::to_string_pretty(&w).unwrap());
+                        }
+                    }
                     None => return Err(TaskError::NotFound(id)),
                 }
             }
@@ -385,6 +635,12 @@ impl CliAdapter {
                 task_id,
                 depends_on,
             } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would add step '{}' to workflow '{}'", name, workflow_id);
+                    }
+                    return Ok(());
+                }
                 use crate::domain::workflows::WorkflowId;
                 let w_id = WorkflowId::from_string(workflow_id);
                 let mut workflow = service
@@ -397,13 +653,78 @@ impl CliAdapter {
                 }
                 workflow = workflow.with_step(step);
                 let updated = service.create_workflow(workflow).await?;
-                println!("{}", serde_json::to_string_pretty(&updated).unwrap());
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&updated).unwrap());
+                }
             }
             WorkflowCommand::Run { id } => {
                 use crate::domain::workflows::WorkflowId;
                 let w_id = WorkflowId::from_string(id);
-                let results = service.execute_workflow(&w_id).await?;
-                println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                let results = service.execute_workflow(&w_id, cli.dry_run).await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn handle_group_command(
+        cli: &Cli,
+        command: GroupCommand,
+        service: Arc<TaskService>,
+    ) -> Result<(), TaskError> {
+        match command {
+            GroupCommand::Create { name, description } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would create group '{}'", name);
+                    }
+                    return Ok(());
+                }
+                let mut group = Group::new(name);
+                if let Some(desc) = description {
+                    group = group.with_description(desc);
+                }
+                let created = service.create_group(group).await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                }
+            }
+            GroupCommand::List => {
+                let groups = service.list_groups().await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&groups).unwrap());
+                }
+            }
+            GroupCommand::Show { name } => {
+                // Look up by name: find in the list, then show details.
+                let groups = service.list_groups().await?;
+                let group = groups
+                    .into_iter()
+                    .find(|g| g.name == name)
+                    .ok_or_else(|| TaskError::NotFound(name.clone()))?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&group).unwrap());
+                }
+            }
+            GroupCommand::Run { name } => {
+                if cli.dry_run {
+                    if !cli.silent {
+                        eprintln!("[dry-run] would run group '{}'", name);
+                    }
+                    return Ok(());
+                }
+                // Look up by name.
+                let groups = service.list_groups().await?;
+                let group = groups
+                    .into_iter()
+                    .find(|g| g.name == name)
+                    .ok_or_else(|| TaskError::NotFound(name.clone()))?;
+                let results = service.run_group(&group.id, cli.dry_run).await?;
+                if !cli.silent {
+                    println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                }
             }
         }
         Ok(())
@@ -449,13 +770,13 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::CreateRaw {
+            Some(Command::CreateRaw {
                 name,
                 priority,
                 command,
                 args,
                 ..
-            } => {
+            }) => {
                 assert_eq!(name, "build");
                 assert_eq!(priority, "high");
                 assert_eq!(command.as_deref(), Some("cargo build"));
@@ -488,7 +809,7 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::RunArgs { id, args } => {
+            Some(Command::RunArgs { id, args }) => {
                 assert_eq!(id, "abc-123");
                 assert_eq!(
                     args,
@@ -516,7 +837,7 @@ mod tests {
         ])
         .expect("parse should succeed");
         match cli.command {
-            Command::CreateRaw { command, args, .. } => {
+            Some(Command::CreateRaw { command, args, .. }) => {
                 assert!(command.is_none());
                 assert_eq!(args, vec!["echo".to_string(), "hello world".to_string()]);
             }
@@ -544,7 +865,7 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::Run { id, args } => {
+            Some(Command::Run { id, args }) => {
                 assert_eq!(id, "abc-123");
                 assert_eq!(
                     args,
@@ -569,7 +890,7 @@ mod tests {
         .expect("parse should succeed");
 
         match cli.command {
-            Command::Run { id, args } => {
+            Some(Command::Run { id, args }) => {
                 assert_eq!(id, "abc-123");
                 assert!(args.is_empty());
             }

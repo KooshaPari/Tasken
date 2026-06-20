@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task query definitions.
 
 use super::super::domain::errors::TaskError;
 use super::super::domain::events::TaskEvent;
 use super::super::domain::tasks::{Task, TaskId, TaskState};
 use super::services::TaskService;
+use crate::config::TaskenConfig;
 
 /// Query to get a task by ID.
 pub struct GetTask {
@@ -31,10 +33,11 @@ pub struct ListTasks {
 
 impl Default for ListTasks {
     fn default() -> Self {
+        let cfg = TaskenConfig::default();
         Self {
             state_filter: None,
             tag_filter: None,
-            limit: Some(100),
+            limit: Some(cfg.default_list_limit),
         }
     }
 }

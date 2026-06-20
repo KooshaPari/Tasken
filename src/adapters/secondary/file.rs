@@ -1,9 +1,10 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! File-based storage adapter for persistence.
 
 use crate::domain::{
     errors::PortError,
     ports::{QueuePort, StoragePort},
-    Schedule, Task, Workflow,
+    Group, Schedule, Task, Workflow,
 };
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -15,6 +16,7 @@ struct DataStore {
     tasks: HashMap<String, Task>,
     workflows: HashMap<String, Workflow>,
     schedules: HashMap<String, Schedule>,
+    groups: HashMap<String, Group>,
     queue: Vec<Task>,
 }
 
@@ -24,6 +26,7 @@ impl Default for DataStore {
             tasks: HashMap::new(),
             workflows: HashMap::new(),
             schedules: HashMap::new(),
+            groups: HashMap::new(),
             queue: Vec::new(),
         }
     }
@@ -120,6 +123,28 @@ impl StoragePort for FileStorage {
     async fn list_schedules(&self) -> Result<Vec<Schedule>, PortError> {
         let store = self.load_store()?;
         Ok(store.schedules.values().cloned().collect())
+    }
+
+    async fn save_group(&self, group: &Group) -> Result<(), PortError> {
+        let mut store = self.load_store()?;
+        store.groups.insert(group.id.0.clone(), group.clone());
+        self.save_store(&store)
+    }
+
+    async fn load_group(&self, id: &str) -> Result<Option<Group>, PortError> {
+        let store = self.load_store()?;
+        Ok(store.groups.get(id).cloned())
+    }
+
+    async fn list_groups(&self) -> Result<Vec<Group>, PortError> {
+        let store = self.load_store()?;
+        Ok(store.groups.values().cloned().collect())
+    }
+
+    async fn delete_group(&self, id: &str) -> Result<(), PortError> {
+        let mut store = self.load_store()?;
+        store.groups.remove(id);
+        self.save_store(&store)
     }
 }
 

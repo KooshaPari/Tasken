@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! In-memory cache for task results.
 
 use crate::domain::tasks::{TaskId, TaskResult};
@@ -90,7 +91,8 @@ impl TaskCache {
 
 impl Default for TaskCache {
     fn default() -> Self {
-        Self::new(Duration::from_secs(300))
+        // Use the config's default TTL for consistency.
+        Self::new(crate::config::TaskenConfig::default().cache_ttl())
     }
 }
 

@@ -1,9 +1,10 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! In-memory storage adapter.
 
 use crate::domain::{
     errors::PortError,
     ports::{QueuePort, StoragePort},
-    Schedule, Task, Workflow,
+    Group, Schedule, Task, Workflow,
 };
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ pub struct MemoryStorage {
     tasks: Arc<RwLock<HashMap<String, Task>>>,
     workflows: Arc<RwLock<HashMap<String, Workflow>>>,
     schedules: Arc<RwLock<HashMap<String, Schedule>>>,
+    groups: Arc<RwLock<HashMap<String, Group>>>,
     queue: Arc<RwLock<Vec<Task>>>,
 }
 
@@ -24,6 +26,7 @@ impl MemoryStorage {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             workflows: Arc::new(RwLock::new(HashMap::new())),
             schedules: Arc::new(RwLock::new(HashMap::new())),
+            groups: Arc::new(RwLock::new(HashMap::new())),
             queue: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -89,6 +92,28 @@ impl StoragePort for MemoryStorage {
     async fn list_schedules(&self) -> Result<Vec<Schedule>, PortError> {
         let schedules = self.schedules.read().map_err(|e| PortError::Storage(e.to_string()))?;
         Ok(schedules.values().cloned().collect())
+    }
+
+    async fn save_group(&self, group: &Group) -> Result<(), PortError> {
+        let mut groups = self.groups.write().map_err(|e| PortError::Storage(e.to_string()))?;
+        groups.insert(group.id.0.clone(), group.clone());
+        Ok(())
+    }
+
+    async fn load_group(&self, id: &str) -> Result<Option<Group>, PortError> {
+        let groups = self.groups.read().map_err(|e| PortError::Storage(e.to_string()))?;
+        Ok(groups.get(id).cloned())
+    }
+
+    async fn list_groups(&self) -> Result<Vec<Group>, PortError> {
+        let groups = self.groups.read().map_err(|e| PortError::Storage(e.to_string()))?;
+        Ok(groups.values().cloned().collect())
+    }
+
+    async fn delete_group(&self, id: &str) -> Result<(), PortError> {
+        let mut groups = self.groups.write().map_err(|e| PortError::Storage(e.to_string()))?;
+        groups.remove(id);
+        Ok(())
     }
 }
 

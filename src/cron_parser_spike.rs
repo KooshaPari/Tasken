@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! SPIKE — W3b — real impl is owned by W3b follow-up.
 //!
 //! Spike for the cron expression parser that will let Tasken schedule

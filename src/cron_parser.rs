@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! W3b — Cron expression parser spike.
 //!
 //! Minimal parser for the 5-field cron format used by Tasken's
