@@ -302,6 +302,75 @@ impl Task {
     }
 }
 
+
+/// Topologically sort tasks based on their `depends_on` field.
+///
+/// Uses Kahn's algorithm. Tasks with no dependencies come first,
+/// followed by tasks whose dependencies are satisfied.
+///
+/// # Panics
+///
+/// Panics if a cycle is detected in the dependency graph.
+pub fn topological_sort_tasks(tasks: &[Task]) -> Vec<Task> {
+    if tasks.is_empty() {
+        return Vec::new();
+    }
+
+    let mut in_degree: HashMap<String, usize> = HashMap::new();
+    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+    let mut task_map: HashMap<String, &Task> = HashMap::new();
+
+    for task in tasks {
+        in_degree.entry(task.id.0.clone()).or_insert(0);
+        adjacency.entry(task.id.0.clone()).or_default();
+        task_map.insert(task.id.0.clone(), task);
+    }
+
+    for task in tasks {
+        for dep in &task.depends_on {
+            adjacency
+                .entry(dep.0.clone())
+                .or_default()
+                .push(task.id.0.clone());
+            *in_degree.entry(task.id.0.clone()).or_insert(0) += 1;
+        }
+    }
+
+    let mut queue: Vec<String> = in_degree
+        .iter()
+        .filter_map(|(id, deg)| if *deg == 0 { Some(id.clone()) } else { None })
+        .collect::<Vec<_>>();
+    queue.sort();
+
+    let mut sorted: Vec<Task> = Vec::with_capacity(tasks.len());
+    let mut visited = HashSet::new();
+
+    while let Some(id) = queue.pop() {
+        visited.insert(id.clone());
+        if let Some(task) = task_map.get(&id) {
+            sorted.push((*task).clone());
+        }
+        if let Some(children) = adjacency.get(&id) {
+            for child in children {
+                if let Some(deg) = in_degree.get_mut(child) {
+                    *deg = deg.saturating_sub(1);
+                    if *deg == 0 && !visited.contains(child.as_str()) {
+                        queue.push(child.clone());
+                    }
+                }
+            }
+        }
+        queue.sort();
+    }
+
+    assert_eq!(
+        visited.len(),
+        tasks.len(),
+        "cycle detected in task dependency graph"
+    );
+
+    sorted
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,73 +532,4 @@ mod tests {
         }));
         assert!(result.is_err());
     }
-}
-
-/// Topologically sort tasks based on their `depends_on` field.
-///
-/// Uses Kahn's algorithm. Tasks with no dependencies come first,
-/// followed by tasks whose dependencies are satisfied.
-///
-/// # Panics
-///
-/// Panics if a cycle is detected in the dependency graph.
-pub fn topological_sort_tasks(tasks: &[Task]) -> Vec<Task> {
-    if tasks.is_empty() {
-        return Vec::new();
-    }
-
-    let mut in_degree: HashMap<String, usize> = HashMap::new();
-    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
-    let mut task_map: HashMap<String, &Task> = HashMap::new();
-
-    for task in tasks {
-        in_degree.entry(task.id.0.clone()).or_insert(0);
-        adjacency.entry(task.id.0.clone()).or_default();
-        task_map.insert(task.id.0.clone(), task);
-    }
-
-    for task in tasks {
-        for dep in &task.depends_on {
-            adjacency
-                .entry(dep.0.clone())
-                .or_default()
-                .push(task.id.0.clone());
-            *in_degree.entry(task.id.0.clone()).or_insert(0) += 1;
-        }
-    }
-
-    let mut queue: Vec<String> = in_degree
-        .iter()
-        .filter_map(|(id, deg)| if *deg == 0 { Some(id.clone()) } else { None })
-        .collect::<Vec<_>>();
-    queue.sort();
-
-    let mut sorted: Vec<Task> = Vec::with_capacity(tasks.len());
-    let mut visited = HashSet::new();
-
-    while let Some(id) = queue.pop() {
-        visited.insert(id.clone());
-        if let Some(task) = task_map.get(&id) {
-            sorted.push((*task).clone());
-        }
-        if let Some(children) = adjacency.get(&id) {
-            for child in children {
-                if let Some(deg) = in_degree.get_mut(child) {
-                    *deg = deg.saturating_sub(1);
-                    if *deg == 0 && !visited.contains(child.as_str()) {
-                        queue.push(child.clone());
-                    }
-                }
-            }
-        }
-        queue.sort();
-    }
-
-    assert_eq!(
-        visited.len(),
-        tasks.len(),
-        "cycle detected in task dependency graph"
-    );
-
-    sorted
 }
