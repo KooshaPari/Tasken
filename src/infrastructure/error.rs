@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Infrastructure error handling.
 
 use std::fmt;

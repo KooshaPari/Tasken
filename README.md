@@ -1,3 +1,27 @@
+<!-- AI-DD-META:START -->
+<!-- This repository is planned, maintained, and managed by AI Agents only. -->
+<!-- Slop issues are expected and intentionally present as part of an HITL-less -->
+<!-- /minimized AI-DD metaproject of learning, refining, and building brute-force -->
+<!-- training for both agents and the human operator. -->
+![Downloads](https://img.shields.io/github/downloads/KooshaPari/Tasken/total?style=flat-square&label=downloads&color=blue)
+![GitHub release](https://img.shields.io/github/v/release/KooshaPari/Tasken?style=flat-square&label=release)
+![License](https://img.shields.io/github/license/KooshaPari/Tasken?style=flat-square)
+![AI-Slop](https://img.shields.io/badge/AI--DD-Slop%20Expected-orange?style=flat-square)
+![AI-Only-Maintained](https://img.shields.io/badge/Planned%20%26%20Maintained%20by-AI%20Agents%20Only-red?style=flat-square)
+![HITL-less](https://img.shields.io/badge/HITL--less%20AI--DD-metaproject-yellow?style=flat-square)
+
+> ⚠️ **AI-Agent-Only Repository**
+>
+> This repo is **planned, maintained, and managed exclusively by AI Agents**.
+> Slop issues, rough edges, and AI artifacts are **expected and intentionally
+> present** as part of an **HITL-less / minimized AI-DD** metaproject focused
+> on learning, refining, and brute-force training both the agents and the
+> human operator. Bug reports and contributions are still welcome, but please
+> expect AI-generated code, comments, and documentation throughout.
+<!-- AI-DD-META:END -->
+> **Work state:** ACTIVE · **Progress:** `█████░░░░░ 45%`
+> Rust task engine; scaffold-to-active, governance complete · updated 2026-06-02
+
 > **Pinned references (Phenotype-org)**
 > - MSRV: see rust-toolchain.toml
 > - cargo-deny config: see deny.toml
@@ -144,3 +168,16 @@ MIT OR Apache-2.0
 **Status**: Active development  
 **Maintained by**: Phenotype Org  
 **Last Updated**: 2026-04-24
+
+## Documentation
+
+This repository includes the following cross-cutting documents:
+
+- [`AGENTS.md`](AGENTS.md) — operating instructions for AI agents and human contributors
+- [`SPEC.md`](SPEC.md) — formal specification of behavior and contracts
+- [`docs/`](docs/) — design notes, ADRs, and supporting documentation (see [`docs/index.md`](docs/index.md))
+
+
+## Absorbed phenoForge contract
+
+phenoForge build-orchestrator research and product intent is preserved under docs/history/archived-repos/phenoForge/. Tasken remains the canonical active task orchestration product; phenoForge material is historical input for build-runner, DAG, caching, plugin, and remote execution requirements.

@@ -1,20 +1,35 @@
-name: cargo-audit
+name: Cargo Audit
+permissions:
+  contents: read
 
 on:
   push:
     branches: [main]
-    paths: ['Cargo.lock', 'Cargo.toml']
   pull_request:
-    paths: ['Cargo.lock', 'Cargo.toml']
   schedule:
-    - cron: '37 5 * * 3'  # weekly Wednesday
-  workflow_dispatch:
+    - cron: '0 9 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  audit:
-    runs-on: ubuntu-latest
+  cargo-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.1.1
-      - uses: rustsec/audit-check@v2
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # was: @master
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: stable
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@b8cecb83565409bcc297b2df6e77f030b2a468d5 # v2
+        with:
+          tool: cargo-audit
+
+      - name: Run cargo audit
+        run: cargo audit

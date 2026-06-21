@@ -1,29 +1,36 @@
-# Phenotype-org standard justfile
+# Tasken Justfile
+#
+# After 2026-06-11, this justfile is a thin shell that re-exports the shared
+# `phenotype.just` library (defined in just/phenotype.just). The 9 most
+# common recipes (default, build, test, lint, fmt, audit, unused, ci, docs)
+# are now defined once in the library and parameterized over the build
+# system.
+#
+# Stack-specific recipes (e.g. `clean`, `dev`) stay in this file.
+#
+# To upgrade: pull the latest phenotype.just from the central repo, or
+# vendor it as a git submodule.
 
-default:
-    @just --list
+import "just/phenotype.just"
 
-build:
-    cargo build --workspace
+# Explicit recipe aliases for the required targets
+# These are thin wrappers around the shared phenotype.just recipes.
 
-test:
-    cargo test --workspace
+check:
+    @just typecheck
 
-lint:
-    cargo clippy --workspace -- -D warnings
-    cargo fmt --check
+clippy:
+    @if [ "{{build_system}}" = "cargo" ]; then cargo clippy --workspace --all-targets -- -D warnings; \
+    else echo "no clippy for {{build_system}}"; fi
 
-fmt:
-    cargo fmt
+deny:
+    @if [ "{{build_system}}" = "cargo" ]; then \
+        (command -v cargo-deny >/dev/null && cargo deny check || echo "cargo-deny not installed; skip"); \
+    else echo "no deny for {{build_system}}"; fi
 
-audit:
-    cargo deny check
-    cargo audit
+doc:
+    @just docs
 
-unused:
-    cargo machete
-
-ci: lint test audit unused
-
-docs:
-    cargo doc --no-deps --workspace
+# Measure code coverage (SSOT: see grade.sh for the canonical command)
+coverage:
+    cargo llvm-cov --workspace --fail-under-lines 85

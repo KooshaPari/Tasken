@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! In-memory storage adapter.
 
 use crate::domain::{
+    errors::PortError,
     ports::{QueuePort, StoragePort},
-    Schedule, Task, Workflow,
+    Group, Schedule, Task, Workflow,
 };
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -13,6 +15,7 @@ pub struct MemoryStorage {
     tasks: Arc<RwLock<HashMap<String, Task>>>,
     workflows: Arc<RwLock<HashMap<String, Workflow>>>,
     schedules: Arc<RwLock<HashMap<String, Schedule>>>,
+    groups: Arc<RwLock<HashMap<String, Group>>>,
     queue: Arc<RwLock<Vec<Task>>>,
 }
 
@@ -23,6 +26,7 @@ impl MemoryStorage {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             workflows: Arc::new(RwLock::new(HashMap::new())),
             schedules: Arc::new(RwLock::new(HashMap::new())),
+            groups: Arc::new(RwLock::new(HashMap::new())),
             queue: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -36,71 +40,103 @@ impl Default for MemoryStorage {
 
 #[async_trait]
 impl StoragePort for MemoryStorage {
-    async fn save_task(&self, task: &Task) -> Result<(), String> {
-        let mut tasks = self.tasks.write().map_err(|e| e.to_string())?;
+    async fn save_task(&self, task: &Task) -> Result<(), PortError> {
+        let mut tasks = self.tasks.write().map_err(|e| PortError::Storage(e.to_string()))?;
         tasks.insert(task.id.0.clone(), task.clone());
         Ok(())
     }
 
-    async fn load_task(&self, id: &str) -> Result<Option<Task>, String> {
-        let tasks = self.tasks.read().map_err(|e| e.to_string())?;
+    async fn load_task(&self, id: &str) -> Result<Option<Task>, PortError> {
+        let tasks = self.tasks.read().map_err(|e| PortError::Storage(e.to_string()))?;
         Ok(tasks.get(id).cloned())
     }
 
-    async fn delete_task(&self, id: &str) -> Result<(), String> {
-        let mut tasks = self.tasks.write().map_err(|e| e.to_string())?;
+    async fn delete_task(&self, id: &str) -> Result<(), PortError> {
+        let mut tasks = self.tasks.write().map_err(|e| PortError::Storage(e.to_string()))?;
         tasks.remove(id);
         Ok(())
     }
 
-    async fn list_tasks(&self) -> Result<Vec<Task>, String> {
-        let tasks = self.tasks.read().map_err(|e| e.to_string())?;
+    async fn list_tasks(&self) -> Result<Vec<Task>, PortError> {
+        let tasks = self.tasks.read().map_err(|e| PortError::Storage(e.to_string()))?;
         Ok(tasks.values().cloned().collect())
     }
 
-    async fn save_workflow(&self, workflow: &Workflow) -> Result<(), String> {
-        let mut workflows = self.workflows.write().map_err(|e| e.to_string())?;
+    async fn save_workflow(&self, workflow: &Workflow) -> Result<(), PortError> {
+        let mut workflows = self.workflows.write().map_err(|e| PortError::Storage(e.to_string()))?;
         workflows.insert(workflow.id.0.clone(), workflow.clone());
         Ok(())
     }
 
-    async fn load_workflow(&self, id: &str) -> Result<Option<Workflow>, String> {
-        let workflows = self.workflows.read().map_err(|e| e.to_string())?;
+    async fn load_workflow(&self, id: &str) -> Result<Option<Workflow>, PortError> {
+        let workflows = self.workflows.read().map_err(|e| PortError::Storage(e.to_string()))?;
         Ok(workflows.get(id).cloned())
     }
 
-    async fn save_schedule(&self, schedule: &Schedule) -> Result<(), String> {
-        let mut schedules = self.schedules.write().map_err(|e| e.to_string())?;
+    async fn list_workflows(&self) -> Result<Vec<Workflow>, PortError> {
+        let workflows = self.workflows.read().map_err(|e| PortError::Storage(e.to_string()))?;
+        Ok(workflows.values().cloned().collect())
+    }
+
+    async fn save_schedule(&self, schedule: &Schedule) -> Result<(), PortError> {
+        let mut schedules = self.schedules.write().map_err(|e| PortError::Storage(e.to_string()))?;
         schedules.insert(schedule.id.0.clone(), schedule.clone());
         Ok(())
     }
 
-    async fn load_schedule(&self, id: &str) -> Result<Option<Schedule>, String> {
-        let schedules = self.schedules.read().map_err(|e| e.to_string())?;
+    async fn load_schedule(&self, id: &str) -> Result<Option<Schedule>, PortError> {
+        let schedules = self.schedules.read().map_err(|e| PortError::Storage(e.to_string()))?;
         Ok(schedules.get(id).cloned())
+    }
+
+    async fn list_schedules(&self) -> Result<Vec<Schedule>, PortError> {
+        let schedules = self.schedules.read().map_err(|e| PortError::Storage(e.to_string()))?;
+        Ok(schedules.values().cloned().collect())
+    }
+
+    async fn save_group(&self, group: &Group) -> Result<(), PortError> {
+        let mut groups = self.groups.write().map_err(|e| PortError::Storage(e.to_string()))?;
+        groups.insert(group.id.0.clone(), group.clone());
+        Ok(())
+    }
+
+    async fn load_group(&self, id: &str) -> Result<Option<Group>, PortError> {
+        let groups = self.groups.read().map_err(|e| PortError::Storage(e.to_string()))?;
+        Ok(groups.get(id).cloned())
+    }
+
+    async fn list_groups(&self) -> Result<Vec<Group>, PortError> {
+        let groups = self.groups.read().map_err(|e| PortError::Storage(e.to_string()))?;
+        Ok(groups.values().cloned().collect())
+    }
+
+    async fn delete_group(&self, id: &str) -> Result<(), PortError> {
+        let mut groups = self.groups.write().map_err(|e| PortError::Storage(e.to_string()))?;
+        groups.remove(id);
+        Ok(())
     }
 }
 
 #[async_trait]
 impl QueuePort for MemoryStorage {
-    async fn enqueue(&self, task: Task) -> Result<(), String> {
-        let mut queue = self.queue.write().map_err(|e| e.to_string())?;
+    async fn enqueue(&self, task: Task) -> Result<(), PortError> {
+        let mut queue = self.queue.write().map_err(|e| PortError::Queue(e.to_string()))?;
         queue.push(task);
         Ok(())
     }
 
-    async fn dequeue(&self) -> Result<Option<Task>, String> {
-        let mut queue = self.queue.write().map_err(|e| e.to_string())?;
+    async fn dequeue(&self) -> Result<Option<Task>, PortError> {
+        let mut queue = self.queue.write().map_err(|e| PortError::Queue(e.to_string()))?;
         Ok(queue.pop())
     }
 
-    async fn len(&self) -> Result<usize, String> {
-        let queue = self.queue.read().map_err(|e| e.to_string())?;
+    async fn len(&self) -> Result<usize, PortError> {
+        let queue = self.queue.read().map_err(|e| PortError::Queue(e.to_string()))?;
         Ok(queue.len())
     }
 
-    async fn is_empty(&self) -> Result<bool, String> {
-        let queue = self.queue.read().map_err(|e| e.to_string())?;
+    async fn is_empty(&self) -> Result<bool, PortError> {
+        let queue = self.queue.read().map_err(|e| PortError::Queue(e.to_string()))?;
         Ok(queue.is_empty())
     }
 }
@@ -143,5 +179,29 @@ mod tests {
         let dequeued = storage.dequeue().await.unwrap();
         assert!(dequeued.is_some());
         assert_eq!(storage.len().await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_save_and_load_workflow() {
+        let storage = MemoryStorage::new();
+        let workflow = Workflow::new("test-workflow");
+
+        storage.save_workflow(&workflow).await.unwrap();
+        let loaded = storage.load_workflow(&workflow.id.0).await.unwrap();
+
+        assert!(loaded.is_some());
+        assert_eq!(loaded.unwrap().name, "test-workflow");
+    }
+
+    #[tokio::test]
+    async fn test_save_and_load_schedule() {
+        let storage = MemoryStorage::new();
+        let schedule = Schedule::once("task-1", chrono::Utc::now() + chrono::Duration::hours(1));
+
+        storage.save_schedule(&schedule).await.unwrap();
+        let loaded = storage.load_schedule(&schedule.id.0).await.unwrap();
+
+        assert!(loaded.is_some());
+        assert_eq!(loaded.unwrap().task_id, "task-1");
     }
 }

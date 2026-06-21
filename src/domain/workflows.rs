@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Workflow definitions and DAG orchestration.
 
 use super::tasks::TaskId;
@@ -12,6 +13,10 @@ pub struct WorkflowId(pub String);
 impl WorkflowId {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
+    }
+
+    pub fn from_string(id: impl Into<String>) -> Self {
+        Self(id.into())
     }
 }
 

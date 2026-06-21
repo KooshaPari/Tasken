@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task execution framework with scheduling and workflow orchestration.
 //!
 //! # Architecture
@@ -22,18 +23,24 @@
 
 pub mod adapters;
 pub mod application;
+pub mod config;
+pub mod cron_parser;
 pub mod domain;
 pub mod infrastructure;
 
 // Re-exports for convenience
 pub use application::services::TaskService;
+pub use config::TaskenConfig;
 pub use domain::errors::TaskError;
 pub use domain::{
-    Schedule, Scheduler, Task, TaskResult, TaskRunner, TaskState, Workflow,
+    NoopPlugin, PluginContext, PluginRegistry, PluginResult, RunnerPlugin, Schedule,
+    Scheduler, ShellPlugin, Task, TaskResult, TaskRunner, TaskState, Workflow,
 };
 pub use domain::tasks::{Priority, RetryPolicy, TaskId};
+pub use domain::groups::{Group, GroupId};
+pub use domain::recipes::{evaluate_condition, interpolate, interpolate_strict, predefined_vars, Settings, VarDefinition, VarType, Vars};
 pub use domain::runners::{AsyncRunner, BackgroundRunner, SyncRunner};
-pub use infrastructure::error::TaskKitError;
+pub use infrastructure::{TaskCache, TaskKitError};
 
 /// Framework version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

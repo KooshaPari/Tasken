@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task runner implementations.
 
 use super::errors::TaskError;
@@ -156,6 +157,89 @@ impl TaskRunner for BackgroundRunner {
     }
 }
 
+/// Shell runner that executes commands via `sh -c`.
+pub struct ShellRunner;
+
+impl ShellRunner {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn extract_command(task: &Task) -> Result<String, TaskError> {
+        task.data
+            .get("command")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| TaskError::InvalidOperation("No command in task.data['command']".into()))
+    }
+}
+
+impl Default for ShellRunner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl TaskRunner for ShellRunner {
+    fn execute(&self, task: &mut Task) -> Result<TaskResult, TaskError> {
+        let _ = task.transition_to(TaskState::Running);
+        let cmd = Self::extract_command(task)?;
+        let start = Instant::now();
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&cmd)
+            .output()
+            .map_err(|e| TaskError::ExecutionFailed(e.to_string()))?;
+        let duration = start.elapsed();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let success = output.status.success();
+        let result = serde_json::json!({
+            "status": if success { "ok" } else { "error" },
+            "code": output.status.code(),
+            "stdout": stdout,
+            "stderr": stderr,
+        });
+        if success {
+            let _ = task.transition_to(TaskState::Completed);
+            Ok(task.success_result(result, duration))
+        } else {
+            let _ = task.transition_to(TaskState::Failed);
+            Ok(task.failure_result(result.to_string(), duration))
+        }
+    }
+
+    async fn execute_async(self: Box<Self>, mut task: Task) -> Result<TaskResult, TaskError> {
+        let _ = task.transition_to(TaskState::Running);
+        let cmd = Self::extract_command(&task)?;
+        let start = Instant::now();
+        let output = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(&cmd)
+            .output()
+            .await
+            .map_err(|e| TaskError::ExecutionFailed(e.to_string()))?;
+        let duration = start.elapsed();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let success = output.status.success();
+        let result = serde_json::json!({
+            "status": if success { "ok" } else { "error" },
+            "code": output.status.code(),
+            "stdout": stdout,
+            "stderr": stderr,
+        });
+        if success {
+            let _ = task.transition_to(TaskState::Completed);
+            Ok(task.success_result(result, duration))
+        } else {
+            let _ = task.transition_to(TaskState::Failed);
+            Ok(task.failure_result(result.to_string(), duration))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,7 +248,6 @@ mod tests {
     fn test_sync_runner() {
         let runner = SyncRunner::new();
         let mut task = Task::new("test");
-
         let result = runner.execute(&mut task);
         assert!(result.is_ok());
         assert!(result.unwrap().success);
@@ -174,8 +257,64 @@ mod tests {
     fn test_background_runner_enqueue() {
         let runner = BackgroundRunner::new();
         let task = Task::new("test");
-
         runner.enqueue(task);
         assert_eq!(runner.queue_len(), 1);
+    }
+
+    #[test]
+    fn test_shell_runner_sync() {
+        let runner = ShellRunner::new();
+        let mut task = Task::new("echo-test").with_command("echo hello");
+        let result = runner.execute(&mut task);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.success);
+        assert!(r.output.unwrap().get("stdout").unwrap().as_str().unwrap().contains("hello"));
+    }
+
+    #[test]
+    fn test_shell_runner_failure() {
+        let runner = ShellRunner::new();
+        let mut task = Task::new("fail-test").with_command("false");
+        let result = runner.execute(&mut task);
+        assert!(result.is_ok());
+        assert!(!result.unwrap().success);
+    }
+
+    #[test]
+    fn test_shell_runner_no_command() {
+        let runner = ShellRunner::new();
+        let mut task = Task::new("no-command");
+        let result = runner.execute(&mut task);
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_async_runner() {
+        let runner: Box<dyn TaskRunner> = Box::new(AsyncRunner::new());
+        let task = Task::new("async-test");
+        let result = runner.execute_async(task).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+    }
+
+    #[tokio::test]
+    async fn test_background_runner_async() {
+        let runner: Box<dyn TaskRunner> = Box::new(BackgroundRunner::new());
+        let task = Task::new("bg-test");
+        let result = runner.execute_async(task).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+    }
+
+    #[tokio::test]
+    async fn test_shell_runner_async() {
+        let runner: Box<dyn TaskRunner> = Box::new(ShellRunner::new());
+        let task = Task::new("async-shell").with_command("echo async");
+        let result = runner.execute_async(task).await;
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.success);
+        assert!(r.output.unwrap().get("stdout").unwrap().as_str().unwrap().contains("async"));
     }
 }

@@ -218,3 +218,8 @@ tasks:
     cmds:
       - cargo release patch --no-push --no-tag --no-dev-version
       - git commit -am "chore(release): bump version to $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+
+  coverage:
+    desc: Measure code coverage (SSOT: see grade.sh for the canonical command).
+    cmds:
+      - cargo llvm-cov --workspace --fail-under-lines 85
