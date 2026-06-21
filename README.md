@@ -128,7 +128,7 @@ cargo doc --open                 # Documentation generation
 
 ## Cross-Repo Integration
 
-Tasken integrates with `phenotype-bus` for event streaming and works alongside Sidekick for agent-driven task distribution. Use Stashly's state machine for workflow state management.
+Tasken emits task and workflow lifecycle events through `phenotype-event-bus` where cross-repo event streaming is required. Agent-driven distribution and workflow-state integrations should be documented against their current owning crates and services rather than stale retired bus assumptions.
 
 ## Related Phenotype Projects
 
