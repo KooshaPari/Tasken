@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+        uses: actions/checkout@v4 # v4.1.1
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
@@ -68,7 +68,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+        uses: actions/checkout@v4 # v4.1.1
 
       - name: Setup Node
         uses: actions/setup-node@1d0ff469b7ec7b138cb3bdcbe74e5672f63d3013 # v4
@@ -97,7 +97,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+        uses: actions/checkout@v4 # v4.1.1
 
       - name: Setup Python
         uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5
