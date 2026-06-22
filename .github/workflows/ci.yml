@@ -17,7 +17,7 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+      - uses: actions/checkout@v4 # v4.1.1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # was: @master
@@ -42,7 +42,7 @@ jobs:
   clippy:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+      - uses: actions/checkout@v4 # v4.1.1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
@@ -65,7 +65,7 @@ jobs:
   fmt:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+      - uses: actions/checkout@v4 # v4.1.1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
@@ -79,7 +79,7 @@ jobs:
   deny:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.1
+      - uses: actions/checkout@v4 # v4.1.1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
