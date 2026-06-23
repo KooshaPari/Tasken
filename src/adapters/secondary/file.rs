@@ -1,35 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! File-based storage adapter for persistence.
 
+use std::collections::HashMap;
+use std::path::Path;
+
+use async_trait::async_trait;
+
 use crate::domain::{
     errors::PortError,
     ports::{QueuePort, StoragePort},
     Group, Schedule, Task, Workflow,
 };
-use async_trait::async_trait;
-use std::collections::HashMap;
-use std::path::Path;
 
 /// Data store structure for serialization.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 struct DataStore {
     tasks: HashMap<String, Task>,
     workflows: HashMap<String, Workflow>,
     schedules: HashMap<String, Schedule>,
     groups: HashMap<String, Group>,
     queue: Vec<Task>,
-}
-
-impl Default for DataStore {
-    fn default() -> Self {
-        Self {
-            tasks: HashMap::new(),
-            workflows: HashMap::new(),
-            schedules: HashMap::new(),
-            groups: HashMap::new(),
-            queue: Vec::new(),
-        }
-    }
 }
 
 /// File-based storage implementation using JSON.
@@ -40,9 +30,7 @@ pub struct FileStorage {
 impl FileStorage {
     /// Create a new file storage at the given path.
     pub fn new(path: impl AsRef<Path>) -> Self {
-        Self {
-            path: path.as_ref().to_path_buf(),
-        }
+        Self { path: path.as_ref().to_path_buf() }
     }
 
     /// Load the data store from disk.
@@ -176,8 +164,9 @@ impl QueuePort for FileStorage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::NamedTempFile;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_save_and_load_task() {

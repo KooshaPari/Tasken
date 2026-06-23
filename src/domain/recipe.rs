@@ -30,9 +30,10 @@
 //! depends_on = ["build"]
 //! ```
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -225,9 +226,7 @@ impl TaskenfileParser {
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
-            .ok_or_else(|| ParseError::UnsupportedExtension(
-                path.display().to_string(),
-            ))?;
+            .ok_or_else(|| ParseError::UnsupportedExtension(path.display().to_string()))?;
 
         if ext != "toml" && ext != "yaml" && ext != "yml" {
             return Err(ParseError::UnsupportedExtension(ext.to_string()));
@@ -291,7 +290,7 @@ impl TaskenfileParser {
                 command,
                 depends_on: task_def.depends_on.clone(),
                 vars: merged_vars,
-                timeout: task_def.timeout.map(|s| Duration::from_secs(s)),
+                timeout: task_def.timeout.map(Duration::from_secs),
                 condition: task_def.condition.clone(),
             });
         }
@@ -333,26 +332,22 @@ impl TaskenfileParser {
             let after_open = &rest[start + 2..];
 
             // Find the closing `}}`
-            let end = after_open
-                .find("}}")
-                .ok_or_else(|| ParseError::Validation(
-                    format!("Unclosed `{{{{` in task `{}`", task_name)
-                ))?;
+            let end = after_open.find("}}").ok_or_else(|| {
+                ParseError::Validation(format!("Unclosed `{{{{` in task `{task_name}`"))
+            })?;
 
             let var_name = after_open[..end].trim();
 
             if var_name.is_empty() {
-                return Err(ParseError::Validation(
-                    format!("Empty variable reference in task `{}`", task_name)
-                ));
+                return Err(ParseError::Validation(format!(
+                    "Empty variable reference in task `{task_name}`"
+                )));
             }
 
             // Look up the variable
-            let value = vars.get(var_name).ok_or_else(|| {
-                ParseError::UndefinedVariable {
-                    name: var_name.to_string(),
-                    task: task_name.to_string(),
-                }
+            let value = vars.get(var_name).ok_or_else(|| ParseError::UndefinedVariable {
+                name: var_name.to_string(),
+                task: task_name.to_string(),
             })?;
 
             result.push_str(value);
@@ -425,10 +420,7 @@ name = "build"
 command = "cargo build --target {{ target }} --package {{ project }}"
 "#;
         let recipe = TaskenfileParser::parse_toml(toml).unwrap();
-        assert_eq!(
-            recipe.tasks[0].command,
-            "cargo build --target x86_64 --package tasken"
-        );
+        assert_eq!(recipe.tasks[0].command, "cargo build --target x86_64 --package tasken");
     }
 
     #[test]
@@ -489,10 +481,7 @@ vars = { region = "us-east-1" }
         // Task-level var should be available
         assert_eq!(recipe.tasks[0].command, "deploy us-east-1");
         // Recipe-level vars should also be in merged vars
-        assert_eq!(
-            recipe.tasks[0].vars.get("env").map(|s| s.as_str()),
-            Some("prod")
-        );
+        assert_eq!(recipe.tasks[0].vars.get("env").map(|s| s.as_str()), Some("prod"));
     }
 
     #[test]
@@ -520,21 +509,14 @@ description = "First step"
 command = "echo step1"
 "#;
         let recipe = TaskenfileParser::parse_toml(toml).unwrap();
-        assert_eq!(
-            recipe.tasks[0].description.as_deref(),
-            Some("First step")
-        );
+        assert_eq!(recipe.tasks[0].description.as_deref(), Some("First step"));
     }
 
     // -- Variable interpolation edge cases ----------------------------------
 
     #[test]
     fn test_interpolation_no_vars_needed() {
-        let cmd = TaskenfileParser::interpolate(
-            "echo hello",
-            &HashMap::new(),
-            "test",
-        ).unwrap();
+        let cmd = TaskenfileParser::interpolate("echo hello", &HashMap::new(), "test").unwrap();
         assert_eq!(cmd, "echo hello");
     }
 
@@ -545,11 +527,7 @@ command = "echo step1"
         vars.insert("b".to_string(), "2".to_string());
         vars.insert("c".to_string(), "3".to_string());
 
-        let cmd = TaskenfileParser::interpolate(
-            "{{ a }}-{{ b }}-{{ c }}",
-            &vars,
-            "test",
-        ).unwrap();
+        let cmd = TaskenfileParser::interpolate("{{ a }}-{{ b }}-{{ c }}", &vars, "test").unwrap();
         assert_eq!(cmd, "1-2-3");
     }
 
@@ -558,21 +536,14 @@ command = "echo step1"
         let mut vars = HashMap::new();
         vars.insert("name".to_string(), "world".to_string());
 
-        let cmd = TaskenfileParser::interpolate(
-            "echo hello {{  name  }}",
-            &vars,
-            "test",
-        ).unwrap();
+        let cmd = TaskenfileParser::interpolate("echo hello {{  name  }}", &vars, "test").unwrap();
         assert_eq!(cmd, "echo hello world");
     }
 
     #[test]
     fn test_interpolation_no_placeholders_preserves_whitespace() {
-        let cmd = TaskenfileParser::interpolate(
-            "  echo  hello  ",
-            &HashMap::new(),
-            "test",
-        ).unwrap();
+        let cmd =
+            TaskenfileParser::interpolate("  echo  hello  ", &HashMap::new(), "test").unwrap();
         assert_eq!(cmd, "  echo  hello  ");
     }
 
@@ -652,9 +623,7 @@ depends_on = ["nonexistent"]
 
     #[test]
     fn test_reject_unsupported_extension() {
-        let err = TaskenfileParser::parse_file(
-            std::path::Path::new("recipe.json"),
-        ).unwrap_err();
+        let err = TaskenfileParser::parse_file(std::path::Path::new("recipe.json")).unwrap_err();
         assert!(matches!(err, ParseError::UnsupportedExtension(_)));
     }
 
@@ -686,7 +655,8 @@ name = "file-test"
 name = "build"
 command = "make"
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         let recipe = TaskenfileParser::parse_file(&path).unwrap();
         assert_eq!(recipe.name, "file-test");
@@ -705,7 +675,8 @@ tasks:
   - name: build
     command: make
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         let recipe = TaskenfileParser::parse_file(&path).unwrap();
         assert_eq!(recipe.name, "yaml-file-test");
@@ -713,9 +684,9 @@ tasks:
 
     #[test]
     fn test_parse_file_not_found() {
-        let err = TaskenfileParser::parse_file(
-            std::path::Path::new("/nonexistent/Taskenfile.toml"),
-        ).unwrap_err();
+        let err =
+            TaskenfileParser::parse_file(std::path::Path::new("/nonexistent/Taskenfile.toml"))
+                .unwrap_err();
         assert!(matches!(err, ParseError::Io(_)));
     }
 

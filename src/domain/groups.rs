@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Group entity — logical collection of tasks.
 
-use super::tasks::TaskId;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+use super::tasks::TaskId;
 
 /// Unique group identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -92,8 +93,7 @@ mod tests {
 
     #[test]
     fn test_group_with_description() {
-        let group = Group::new("test-group")
-            .with_description("All test tasks");
+        let group = Group::new("test-group").with_description("All test tasks");
         assert_eq!(group.description.as_deref(), Some("All test tasks"));
     }
 
@@ -101,9 +101,7 @@ mod tests {
     fn test_group_with_tasks() {
         let t1 = TaskId::new();
         let t2 = TaskId::new();
-        let group = Group::new("my-group")
-            .with_task(t1.clone())
-            .with_task(t2.clone());
+        let group = Group::new("my-group").with_task(t1.clone()).with_task(t2.clone());
         assert_eq!(group.task_ids.len(), 2);
         assert!(!group.is_empty());
     }

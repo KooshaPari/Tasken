@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! In-memory storage adapter.
 
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+
+use async_trait::async_trait;
+
 use crate::domain::{
     errors::PortError,
     ports::{QueuePort, StoragePort},
     Group, Schedule, Task, Workflow,
 };
-use async_trait::async_trait;
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 
 /// In-memory storage implementation.
 pub struct MemoryStorage {
@@ -63,7 +65,8 @@ impl StoragePort for MemoryStorage {
     }
 
     async fn save_workflow(&self, workflow: &Workflow) -> Result<(), PortError> {
-        let mut workflows = self.workflows.write().map_err(|e| PortError::Storage(e.to_string()))?;
+        let mut workflows =
+            self.workflows.write().map_err(|e| PortError::Storage(e.to_string()))?;
         workflows.insert(workflow.id.0.clone(), workflow.clone());
         Ok(())
     }
@@ -79,7 +82,8 @@ impl StoragePort for MemoryStorage {
     }
 
     async fn save_schedule(&self, schedule: &Schedule) -> Result<(), PortError> {
-        let mut schedules = self.schedules.write().map_err(|e| PortError::Storage(e.to_string()))?;
+        let mut schedules =
+            self.schedules.write().map_err(|e| PortError::Storage(e.to_string()))?;
         schedules.insert(schedule.id.0.clone(), schedule.clone());
         Ok(())
     }

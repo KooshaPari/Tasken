@@ -72,7 +72,7 @@ fn test_cache_insert_with_ttl_overrides_default() {
 fn test_cache_clear_removes_all_entries() {
     let cache = TaskCache::new(Duration::from_secs(60));
     for i in 0..5 {
-        let id = TaskId::from_string(format!("t-{}", i));
+        let id = TaskId::from_string(format!("t-{i}"));
         let result = TaskResult {
             task_id: id.clone(),
             success: true,
@@ -270,9 +270,7 @@ async fn test_service_retry_limit_exceeded() {
         max_delay: Duration::from_secs(10),
         jitter: 0.0,
     };
-    let cmd = CreateTask::new("limit-test")
-        .with_command("echo hello")
-        .with_retry_policy(policy);
+    let cmd = CreateTask::new("limit-test").with_command("echo hello").with_retry_policy(policy);
     let task = service.create_task(cmd).await.unwrap();
     let result = service.run_task(&task.id, false).await.unwrap();
     assert!(result.success);
@@ -337,7 +335,7 @@ async fn test_service_create_task_with_priority_low_and_critical() {
     ] {
         let cmd = CreateTask::new(name).with_priority(expected);
         let task = service.create_task(cmd).await.unwrap();
-        assert_eq!(task.priority, expected, "priority mismatch for {}", name);
+        assert_eq!(task.priority, expected, "priority mismatch for {name}");
     }
 }
 

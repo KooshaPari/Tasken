@@ -100,9 +100,7 @@ impl Schedule {
         Self {
             id: ScheduleId::new(),
             task_id: task_id.into(),
-            kind: ScheduleKind::Interval {
-                every: every_seconds,
-            },
+            kind: ScheduleKind::Interval { every: every_seconds },
             active: true,
             last_run: None,
             next_run: Some(now + Duration::seconds(every_seconds)),
@@ -113,9 +111,7 @@ impl Schedule {
     /// Create a new cron schedule.
     pub fn cron(task_id: impl Into<String>, expression: impl Into<String>) -> Self {
         let now = Utc::now();
-        let kind = ScheduleKind::Cron {
-            expression: expression.into(),
-        };
+        let kind = ScheduleKind::Cron { expression: expression.into() };
         Self {
             id: ScheduleId::new(),
             task_id: task_id.into(),
@@ -194,9 +190,7 @@ mod tests {
     #[test]
     fn test_cron_schedule_next_run() {
         let now = Utc::now();
-        let kind = ScheduleKind::Cron {
-            expression: "0 0 * * *".to_string(),
-        };
+        let kind = ScheduleKind::Cron { expression: "0 0 * * *".to_string() };
         let next = kind.next_run(now);
         assert!(next.is_some());
         assert!(next.unwrap() > now);
@@ -205,9 +199,7 @@ mod tests {
     #[test]
     fn test_daily_schedule_next_run() {
         let now = Utc::now();
-        let kind = ScheduleKind::Daily {
-            at: "09:00".to_string(),
-        };
+        let kind = ScheduleKind::Daily { at: "09:00".to_string() };
         let next = kind.next_run(now);
         assert!(next.is_some());
         assert!(next.unwrap() > now);
@@ -216,10 +208,7 @@ mod tests {
     #[test]
     fn test_weekly_schedule_next_run() {
         let now = Utc::now();
-        let kind = ScheduleKind::Weekly {
-            days: vec!["mon".to_string()],
-            at: "09:00".to_string(),
-        };
+        let kind = ScheduleKind::Weekly { days: vec!["mon".to_string()], at: "09:00".to_string() };
         let next = kind.next_run(now);
         assert!(next.is_some());
         assert!(next.unwrap() > now);

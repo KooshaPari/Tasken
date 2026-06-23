@@ -5,9 +5,10 @@
 //! and rendering recipes — reusable task templates with parameterized
 //! commands, environment settings, and variable substitution.
 
+use std::collections::HashMap;
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // VarType
@@ -92,10 +93,7 @@ impl Vars {
     /// Create an empty variable store with no definitions and only
     /// pre-defined variables populated.
     pub fn empty() -> Self {
-        Self {
-            definitions: Vec::new(),
-            values: predefined_vars(),
-        }
+        Self { definitions: Vec::new(), values: predefined_vars() }
     }
 
     /// Create a variable store with the given definitions, applying
@@ -161,10 +159,7 @@ pub fn predefined_vars() -> HashMap<String, String> {
     map.insert("arch".to_string(), std::env::consts::ARCH.to_string());
 
     // Current UTC timestamp in ISO‑8601 format.
-    map.insert(
-        "timestamp".to_string(),
-        Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
-    );
+    map.insert("timestamp".to_string(), Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string());
 
     // Process id.
     map.insert("pid".to_string(), std::process::id().to_string());
@@ -183,7 +178,7 @@ pub fn predefined_vars() -> HashMap<String, String> {
 // ---------------------------------------------------------------------------
 
 /// Global settings that control *how* a recipe is executed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Settings {
     /// Shell to use for executing commands (e.g. `/bin/bash`, `powershell.exe`).
     /// `None` means the system default (`sh -c` on Unix, `cmd /C` on Windows).
@@ -197,17 +192,6 @@ pub struct Settings {
     /// Maximum number of concurrent task executions.
     /// `None` means no limit (unbounded parallelism).
     pub max_concurrency: Option<usize>,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            shell: None,
-            work_dir: None,
-            env: HashMap::new(),
-            max_concurrency: None,
-        }
-    }
 }
 
 impl Settings {
@@ -302,7 +286,7 @@ pub fn interpolate(template: &str, vars: &Vars, fail_on_undefined: bool) -> Stri
                 } else if let Some(value) = vars.get(var_name) {
                     result.push_str(value);
                 } else if fail_on_undefined {
-                    result.push_str(&format!("{{{{ undefined: {} }}}}", var_name));
+                    result.push_str(&format!("{{{{ undefined: {var_name} }}}}"));
                 } else {
                     // Leave the placeholder unchanged.
                     result.push_str(&template[abs_start..abs_end]);
@@ -615,9 +599,10 @@ fn resolve_var(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::domain::recipe::TaskenfileParser;
-    use std::collections::HashMap;
 
     // -- VarType tests -------------------------------------------------------
 
@@ -723,27 +708,15 @@ mod tests {
         let pv = predefined_vars();
         let ts = pv.get("timestamp").unwrap();
         // ISO-8601 with milliseconds: e.g. "2026-06-20T12:34:56.789Z"
-        assert!(
-            ts.len() >= 24,
-            "timestamp '{}' should be ISO-8601 format",
-            ts
-        );
-        assert!(
-            ts.ends_with('Z'),
-            "timestamp '{}' should end with Z",
-            ts
-        );
+        assert!(ts.len() >= 24, "timestamp '{ts}' should be ISO-8601 format");
+        assert!(ts.ends_with('Z'), "timestamp '{ts}' should end with Z");
     }
 
     #[test]
     fn test_predefined_vars_pid_is_numeric() {
         let pv = predefined_vars();
         let pid = pv.get("pid").unwrap();
-        assert!(
-            pid.parse::<u32>().is_ok(),
-            "pid '{}' should be a numeric string",
-            pid
-        );
+        assert!(pid.parse::<u32>().is_ok(), "pid '{pid}' should be a numeric string");
     }
 
     // -- Settings tests ------------------------------------------------------
@@ -775,10 +748,7 @@ mod tests {
 
     #[test]
     fn test_interpolate_basic() {
-        let vars = Vars::new(
-            vec![],
-            HashMap::from([("name".into(), "world".into())]),
-        );
+        let vars = Vars::new(vec![], HashMap::from([("name".into(), "world".into())]));
         let result = interpolate("hello {{ name }}!", &vars, false);
         assert_eq!(result, "hello world!");
     }
@@ -787,10 +757,7 @@ mod tests {
     fn test_interpolate_multiple_vars() {
         let vars = Vars::new(
             vec![],
-            HashMap::from([
-                ("first".into(), "John".into()),
-                ("last".into(), "Doe".into()),
-            ]),
+            HashMap::from([("first".into(), "John".into()), ("last".into(), "Doe".into())]),
         );
         let result = interpolate("{{ first }} {{ last }}", &vars, false);
         assert_eq!(result, "John Doe");
@@ -857,20 +824,15 @@ mod tests {
 
     #[test]
     fn test_interpolate_adjacent_vars() {
-        let vars = Vars::new(
-            vec![],
-            HashMap::from([("a".into(), "x".into()), ("b".into(), "y".into())]),
-        );
+        let vars =
+            Vars::new(vec![], HashMap::from([("a".into(), "x".into()), ("b".into(), "y".into())]));
         let result = interpolate("{{a}}{{b}}", &vars, false);
         assert_eq!(result, "xy");
     }
 
     #[test]
     fn test_interpolate_with_whitespace() {
-        let vars = Vars::new(
-            vec![],
-            HashMap::from([("name".into(), "world".into())]),
-        );
+        let vars = Vars::new(vec![], HashMap::from([("name".into(), "world".into())]));
         let result = interpolate("hello {{name}}!", &vars, false);
         assert_eq!(result, "hello world!");
     }
@@ -879,10 +841,7 @@ mod tests {
     fn test_interpolate_command_with_vars() {
         let vars = Vars::new(
             vec![],
-            HashMap::from([
-                ("file".into(), "data.txt".into()),
-                ("dest".into(), "/tmp".into()),
-            ]),
+            HashMap::from([("file".into(), "data.txt".into()), ("dest".into(), "/tmp".into())]),
         );
         let cmd = "cp {{ file }} {{ dest }}/";
         let result = interpolate(cmd, &vars, false);
@@ -893,10 +852,7 @@ mod tests {
 
     #[test]
     fn test_interpolate_strict_ok() {
-        let vars = Vars::new(
-            vec![],
-            HashMap::from([("name".into(), "world".into())]),
-        );
+        let vars = Vars::new(vec![], HashMap::from([("name".into(), "world".into())]));
         let result = interpolate_strict("hello {{ name }}!", &vars);
         assert_eq!(result, Ok("hello world!".into()));
     }
@@ -905,12 +861,7 @@ mod tests {
     fn test_interpolate_strict_undefined() {
         let vars = Vars::empty();
         let result = interpolate_strict("hello {{ missing }}!", &vars);
-        assert_eq!(
-            result,
-            Err(InterpolationError::UndefinedVariable {
-                name: "missing".into()
-            })
-        );
+        assert_eq!(result, Err(InterpolationError::UndefinedVariable { name: "missing".into() }));
     }
 
     // -- Serialization tests -------------------------------------------------
@@ -961,30 +912,30 @@ mod tests {
     fn test_condition_os_equality() {
         let current_os = std::env::consts::OS;
         // Should match the current OS
-        assert!(evaluate_condition(&format!("os == \"{}\"", current_os)));
+        assert!(evaluate_condition(&format!("os == \"{current_os}\"")));
         // Should NOT match a different OS
         let other_os = if current_os == "linux" { "macos" } else { "linux" };
-        assert!(!evaluate_condition(&format!("os == \"{}\"", other_os)));
+        assert!(!evaluate_condition(&format!("os == \"{other_os}\"")));
     }
 
     #[test]
     fn test_condition_arch_equality() {
         let current_arch = std::env::consts::ARCH;
-        assert!(evaluate_condition(&format!("arch == \"{}\"", current_arch)));
+        assert!(evaluate_condition(&format!("arch == \"{current_arch}\"")));
         assert!(!evaluate_condition(&format!("arch == \"{}\"", "nonexistent_arch")));
     }
 
     #[test]
     fn test_condition_os_inequality() {
         let current_os = std::env::consts::OS;
-        assert!(!evaluate_condition(&format!("os != \"{}\"", current_os)));
+        assert!(!evaluate_condition(&format!("os != \"{current_os}\"")));
         assert!(evaluate_condition("os != \"nonexistent_os\""));
     }
 
     #[test]
     fn test_condition_arch_inequality() {
         let current_arch = std::env::consts::ARCH;
-        assert!(!evaluate_condition(&format!("arch != \"{}\"", current_arch)));
+        assert!(!evaluate_condition(&format!("arch != \"{current_arch}\"")));
         assert!(evaluate_condition("arch != \"nonexistent_arch\""));
     }
 
@@ -993,7 +944,7 @@ mod tests {
         let current_os = std::env::consts::OS;
         // Every OS name contains its first character
         let first_char = &current_os[..1];
-        assert!(evaluate_condition(&format!("os contains \"{}\"", first_char)));
+        assert!(evaluate_condition(&format!("os contains \"{first_char}\"")));
         // No OS contains "zzzzzz"
         assert!(!evaluate_condition("os contains \"zzzzzz\""));
     }
@@ -1005,8 +956,7 @@ mod tests {
         let current_os = std::env::consts::OS;
         let current_arch = std::env::consts::ARCH;
         assert!(evaluate_condition(&format!(
-            "os == \"{}\" and arch == \"{}\"",
-            current_os, current_arch
+            "os == \"{current_os}\" and arch == \"{current_arch}\""
         )));
     }
 
@@ -1014,8 +964,7 @@ mod tests {
     fn test_condition_and_false() {
         let current_os = std::env::consts::OS;
         assert!(!evaluate_condition(&format!(
-            "os == \"{}\" and arch == \"nonexistent\"",
-            current_os
+            "os == \"{current_os}\" and arch == \"nonexistent\""
         )));
     }
 
@@ -1035,8 +984,7 @@ mod tests {
         let current_arch = std::env::consts::ARCH;
         // (os == "current" and arch == "current") should be true
         assert!(evaluate_condition(&format!(
-            "(os == \"{}\" and arch == \"{}\")",
-            current_os, current_arch
+            "(os == \"{current_os}\" and arch == \"{current_arch}\")"
         )));
     }
 
@@ -1045,14 +993,12 @@ mod tests {
         let current_os = std::env::consts::OS;
         // (os == "current" or os == "nonexistent") and arch != "nonexistent"
         assert!(evaluate_condition(&format!(
-            "(os == \"{}\" or os == \"fake\") and arch != \"nonexistent\"",
-            current_os
+            "(os == \"{current_os}\" or os == \"fake\") and arch != \"nonexistent\""
         )));
         // (os == "nonexistent1" and os == "nonexistent2") or arch == "nonexistent"
         let current_arch = std::env::consts::ARCH;
         assert!(evaluate_condition(&format!(
-            "(os == \"x1\" and os == \"x2\") or arch == \"{}\"",
-            current_arch
+            "(os == \"x1\" and os == \"x2\") or arch == \"{current_arch}\""
         )));
     }
 
@@ -1061,13 +1007,11 @@ mod tests {
         // os == "current" or (os == "x" and arch == "y")
         let current_os = std::env::consts::OS;
         assert!(evaluate_condition(&format!(
-            "os == \"{}\" or (os == \"x\" and arch == \"y\")",
-            current_os
+            "os == \"{current_os}\" or (os == \"x\" and arch == \"y\")"
         )));
         // (os == "x" and arch == "y") or os == "current"
         assert!(evaluate_condition(&format!(
-            "(os == \"x\" and arch == \"y\") or os == \"{}\"",
-            current_os
+            "(os == \"x\" and arch == \"y\") or os == \"{current_os}\""
         )));
     }
 
@@ -1101,7 +1045,7 @@ mod tests {
         // Missing closing paren - the parser still evaluates but returns
         // the inner result, then there's no closing paren.
         // (os == "current" should still evaluate
-        assert!(evaluate_condition(&format!("(os == \"{}\"", current_os)));
+        assert!(evaluate_condition(&format!("(os == \"{current_os}\"")));
     }
 
     #[test]
@@ -1134,14 +1078,8 @@ condition = 'os == "macos"'
 "#;
         let recipe = TaskenfileParser::parse_toml(toml).unwrap();
         assert_eq!(recipe.tasks.len(), 2);
-        assert_eq!(
-            recipe.tasks[0].condition.as_deref(),
-            Some("os == \"linux\"")
-        );
-        assert_eq!(
-            recipe.tasks[1].condition.as_deref(),
-            Some("os == \"macos\"")
-        );
+        assert_eq!(recipe.tasks[0].condition.as_deref(), Some("os == \"linux\""));
+        assert_eq!(recipe.tasks[1].condition.as_deref(), Some("os == \"macos\""));
     }
 
     #[test]
@@ -1174,10 +1112,7 @@ condition = 'os == "linux"'
 "#;
         let recipe = TaskenfileParser::parse_toml(toml).unwrap();
         assert_eq!(recipe.tasks[1].depends_on, vec!["init"]);
-        assert_eq!(
-            recipe.tasks[1].condition.as_deref(),
-            Some("os == \"linux\"")
-        );
+        assert_eq!(recipe.tasks[1].condition.as_deref(), Some("os == \"linux\""));
     }
 
     #[test]

@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task entity and related types.
 
-use super::errors::TaskError;
-use super::events::TaskEvent;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+use super::errors::TaskError;
+use super::events::TaskEvent;
 
 /// Unique task identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -192,10 +194,7 @@ impl Task {
 
         // Validate state transition
         if !self.can_transition_to(&new_state) {
-            return Err(TaskError::InvalidStateTransition {
-                from: old_state,
-                to: new_state,
-            });
+            return Err(TaskError::InvalidStateTransition { from: old_state, to: new_state });
         }
 
         self.state = new_state;
@@ -303,7 +302,6 @@ impl Task {
     }
 }
 
-
 /// Topologically sort tasks based on their `depends_on` field.
 ///
 /// Uses Kahn's algorithm. Tasks with no dependencies come first,
@@ -329,10 +327,7 @@ pub fn topological_sort_tasks(tasks: &[Task]) -> Vec<Task> {
 
     for task in tasks {
         for dep in &task.depends_on {
-            adjacency
-                .entry(dep.0.clone())
-                .or_default()
-                .push(task.id.0.clone());
+            adjacency.entry(dep.0.clone()).or_default().push(task.id.0.clone());
             *in_degree.entry(task.id.0.clone()).or_insert(0) += 1;
         }
     }
@@ -364,11 +359,7 @@ pub fn topological_sort_tasks(tasks: &[Task]) -> Vec<Task> {
         queue.sort();
     }
 
-    assert_eq!(
-        visited.len(),
-        tasks.len(),
-        "cycle detected in task dependency graph"
-    );
+    assert_eq!(visited.len(), tasks.len(), "cycle detected in task dependency graph");
 
     sorted
 }
@@ -460,7 +451,8 @@ mod tests {
     #[test]
     fn test_success_result() {
         let task = Task::new("result-test");
-        let result = task.success_result(serde_json::json!({"status": "ok"}), Duration::from_secs(1));
+        let result =
+            task.success_result(serde_json::json!({"status": "ok"}), Duration::from_secs(1));
         assert!(result.success);
         assert_eq!(result.task_id, task.id);
         assert!(result.error.is_none());
@@ -509,10 +501,8 @@ mod tests {
     #[test]
     fn test_topological_sort_with_deps() {
         let t1 = Task::new("build-lib");
-        let t2 = Task::new("run-tests")
-            .with_dependency(t1.id.clone());
-        let t3 = Task::new("deploy")
-            .with_dependency(t2.id.clone());
+        let t2 = Task::new("run-tests").with_dependency(t1.id.clone());
+        let t3 = Task::new("deploy").with_dependency(t2.id.clone());
 
         let sorted = topological_sort_tasks(&[t3.clone(), t2.clone(), t1.clone()]);
         assert_eq!(sorted.len(), 3);

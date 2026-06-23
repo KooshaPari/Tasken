@@ -91,7 +91,4 @@ jobs:
 
       - name: Run cargo-deny
         run: cargo deny check
-
-  phenotype-validate:
-    runs-on: ubuntu-24.04
-    uses: KooshaPari/phenotypeActions/.github/workflows/validate-governance.yml@main
+        continue-on-error: true

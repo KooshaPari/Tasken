@@ -36,9 +36,7 @@ impl ForwardedArgs {
 
     /// Build a forwarded args list from a slice.
     pub fn from_slice<S: AsRef<str>>(slice: &[S]) -> Self {
-        Self {
-            args: slice.iter().map(|s| s.as_ref().to_string()).collect(),
-        }
+        Self { args: slice.iter().map(|s| s.as_ref().to_string()).collect() }
     }
 
     /// True when no arguments were forwarded.
@@ -56,20 +54,13 @@ impl ForwardedArgs {
     /// Empty arguments are preserved as `''`. Arguments containing
     /// whitespace or shell metacharacters are wrapped in single quotes.
     pub fn shell_quote(&self) -> String {
-        self.args
-            .iter()
-            .map(|a| shell_quote_single(a))
-            .collect::<Vec<_>>()
-            .join(" ")
+        self.args.iter().map(|a| shell_quote_single(a)).collect::<Vec<_>>().join(" ")
     }
 
     /// Render as a JSON array.
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::Value::Array(
-            self.args
-                .iter()
-                .map(|s| serde_json::Value::String(s.clone()))
-                .collect(),
+            self.args.iter().map(|s| serde_json::Value::String(s.clone())).collect(),
         )
     }
 }
@@ -82,17 +73,13 @@ impl std::fmt::Display for ForwardedArgs {
 
 impl std::iter::FromIterator<String> for ForwardedArgs {
     fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> Self {
-        Self {
-            args: iter.into_iter().collect(),
-        }
+        Self { args: iter.into_iter().collect() }
     }
 }
 
 impl<'a> std::iter::FromIterator<&'a str> for ForwardedArgs {
     fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> Self {
-        Self {
-            args: iter.into_iter().map(|s| s.to_string()).collect(),
-        }
+        Self { args: iter.into_iter().map(|s| s.to_string()).collect() }
     }
 }
 
@@ -211,9 +198,7 @@ mod tests {
 
     #[test]
     fn test_builder_push() {
-        let f = ForwardedArgs::new()
-            .push("--release")
-            .push("--target=x86_64");
+        let f = ForwardedArgs::new().push("--release").push("--target=x86_64");
         assert_eq!(f.args, vec!["--release", "--target=x86_64"]);
     }
 
@@ -226,9 +211,7 @@ mod tests {
 
     #[test]
     fn test_from_iter_string() {
-        let f: ForwardedArgs = vec!["a".to_string(), "b".to_string()]
-            .into_iter()
-            .collect();
+        let f: ForwardedArgs = vec!["a".to_string(), "b".to_string()].into_iter().collect();
         assert_eq!(f.args.len(), 2);
     }
 
@@ -281,10 +264,7 @@ mod tests {
     fn test_to_json() {
         let f = ForwardedArgs::new().push("--foo").push("bar");
         let json = f.to_json();
-        assert_eq!(
-            json,
-            serde_json::json!(["--foo", "bar"])
-        );
+        assert_eq!(json, serde_json::json!(["--foo", "bar"]));
     }
 
     #[test]
@@ -330,19 +310,13 @@ mod tests {
     #[test]
     fn test_compose_command_with_args() {
         let f = ForwardedArgs::new().push("--release").push("x86_64");
-        assert_eq!(
-            compose_command("cargo build", &f),
-            "cargo build --release x86_64"
-        );
+        assert_eq!(compose_command("cargo build", &f), "cargo build --release x86_64");
     }
 
     #[test]
     fn test_compose_command_quotes_special_chars() {
         let f = ForwardedArgs::new().push("hello world");
-        assert_eq!(
-            compose_command("echo", &f),
-            "echo 'hello world'"
-        );
+        assert_eq!(compose_command("echo", &f), "echo 'hello world'");
     }
 
     #[test]

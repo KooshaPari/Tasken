@@ -27,9 +27,7 @@ mod dependency_cycles {
     fn setup_service_with_cache() -> Arc<TaskService> {
         let storage = Arc::new(MemoryStorage::new());
         let queue = Arc::new(MemoryStorage::new());
-        let cache = Arc::new(PersistentTaskCache::ephemeral(
-            std::time::Duration::from_secs(300),
-        ));
+        let cache = Arc::new(PersistentTaskCache::ephemeral(std::time::Duration::from_secs(300)));
         Arc::new(TaskService::with_cache(storage, queue, cache))
     }
 
@@ -40,30 +38,20 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_linear_dag_workflow() {
         let service = setup_service_with_cache();
-        let task_a = service
-            .create_task(CreateTask::new("a").with_command("echo a"))
-            .await
-            .unwrap();
-        let task_b = service
-            .create_task(CreateTask::new("b").with_command("echo b"))
-            .await
-            .unwrap();
-        let task_c = service
-            .create_task(CreateTask::new("c").with_command("echo c"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("a").with_command("echo a")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("b").with_command("echo b")).await.unwrap();
+        let task_c =
+            service.create_task(CreateTask::new("c").with_command("echo c")).await.unwrap();
 
         let workflow = Workflow::new("linear")
             .with_step(WorkflowStep::new("step-a").with_task(task_a.id.clone()))
             .with_step(
-                WorkflowStep::new("step-b")
-                    .with_task(task_b.id.clone())
-                    .with_dependency("step-a"),
+                WorkflowStep::new("step-b").with_task(task_b.id.clone()).with_dependency("step-a"),
             )
             .with_step(
-                WorkflowStep::new("step-c")
-                    .with_task(task_c.id.clone())
-                    .with_dependency("step-b"),
+                WorkflowStep::new("step-c").with_task(task_c.id.clone()).with_dependency("step-b"),
             );
 
         let created = service.create_workflow(workflow).await.unwrap();
@@ -76,10 +64,8 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_linear_dag_topological_sort() {
         let service = setup_service();
-        let task_a = service
-            .create_task(CreateTask::new("build").with_command("echo build"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("build").with_command("echo build")).await.unwrap();
         let task_b = service
             .create_task(
                 CreateTask::new("test")
@@ -116,34 +102,22 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_diamond_dag_workflow() {
         let service = setup_service_with_cache();
-        let task_a = service
-            .create_task(CreateTask::new("root").with_command("echo root"))
-            .await
-            .unwrap();
-        let task_b = service
-            .create_task(CreateTask::new("left").with_command("echo left"))
-            .await
-            .unwrap();
-        let task_c = service
-            .create_task(CreateTask::new("right").with_command("echo right"))
-            .await
-            .unwrap();
-        let task_d = service
-            .create_task(CreateTask::new("leaf").with_command("echo leaf"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("root").with_command("echo root")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("left").with_command("echo left")).await.unwrap();
+        let task_c =
+            service.create_task(CreateTask::new("right").with_command("echo right")).await.unwrap();
+        let task_d =
+            service.create_task(CreateTask::new("leaf").with_command("echo leaf")).await.unwrap();
 
         let workflow = Workflow::new("diamond")
             .with_step(WorkflowStep::new("root").with_task(task_a.id.clone()))
             .with_step(
-                WorkflowStep::new("left")
-                    .with_task(task_b.id.clone())
-                    .with_dependency("root"),
+                WorkflowStep::new("left").with_task(task_b.id.clone()).with_dependency("root"),
             )
             .with_step(
-                WorkflowStep::new("right")
-                    .with_task(task_c.id.clone())
-                    .with_dependency("root"),
+                WorkflowStep::new("right").with_task(task_c.id.clone()).with_dependency("root"),
             )
             .with_step(
                 WorkflowStep::new("leaf")
@@ -172,10 +146,7 @@ mod dependency_cycles {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             topological_sort_tasks(&[t1, t2]);
         }));
-        assert!(
-            result.is_err(),
-            "topological_sort_tasks must panic on a circular dependency"
-        );
+        assert!(result.is_err(), "topological_sort_tasks must panic on a circular dependency");
     }
 
     #[tokio::test]
@@ -186,46 +157,26 @@ mod dependency_cycles {
         let mut step_b = WorkflowStep::new("b");
         step_b.depends_on = vec!["a".to_string()];
 
-        let mut workflow = Workflow::new("cycle-test")
-            .with_step(step_a)
-            .with_step(step_b);
+        let mut workflow = Workflow::new("cycle-test").with_step(step_a).with_step(step_b);
 
         let err = workflow.build_dag().unwrap_err();
-        assert!(
-            err.contains("cycle"),
-            "build_dag error must mention 'cycle', got: {err}"
-        );
+        assert!(err.contains("cycle"), "build_dag error must mention 'cycle', got: {err}");
     }
 
     #[tokio::test]
     async fn test_circular_dependency_detected_via_execute() {
         let service = setup_service();
-        let task_a = service
-            .create_task(CreateTask::new("a").with_command("echo a"))
-            .await
-            .unwrap();
-        let task_b = service
-            .create_task(CreateTask::new("b").with_command("echo b"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("a").with_command("echo a")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("b").with_command("echo b")).await.unwrap();
 
         let mut workflow = Workflow::new("cycle-exec")
-            .with_step(
-                WorkflowStep::new("a")
-                    .with_task(task_a.id.clone())
-                    .with_dependency("b"),
-            )
-            .with_step(
-                WorkflowStep::new("b")
-                    .with_task(task_b.id.clone())
-                    .with_dependency("a"),
-            );
+            .with_step(WorkflowStep::new("a").with_task(task_a.id.clone()).with_dependency("b"))
+            .with_step(WorkflowStep::new("b").with_task(task_b.id.clone()).with_dependency("a"));
 
         let err = workflow.build_dag().unwrap_err();
-        assert!(
-            err.contains("cycle"),
-            "execute_workflow must reject cycle, got: {err}"
-        );
+        assert!(err.contains("cycle"), "execute_workflow must reject cycle, got: {err}");
     }
 
     // -----------------------------------------------------------------------
@@ -235,17 +186,11 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_self_referencing_cycle_detected() {
         let service = setup_service();
-        let task_a = service
-            .create_task(CreateTask::new("a").with_command("echo a"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("a").with_command("echo a")).await.unwrap();
 
         let mut workflow = Workflow::new("self-cycle")
-            .with_step(
-                WorkflowStep::new("a")
-                    .with_task(task_a.id.clone())
-                    .with_dependency("a"),
-            );
+            .with_step(WorkflowStep::new("a").with_task(task_a.id.clone()).with_dependency("a"));
 
         let err = workflow.build_dag().unwrap_err();
         assert!(
@@ -261,41 +206,20 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_complex_cycle_detected() {
         let service = setup_service();
-        let task_a = service
-            .create_task(CreateTask::new("a").with_command("echo a"))
-            .await
-            .unwrap();
-        let task_b = service
-            .create_task(CreateTask::new("b").with_command("echo b"))
-            .await
-            .unwrap();
-        let task_c = service
-            .create_task(CreateTask::new("c").with_command("echo c"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("a").with_command("echo a")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("b").with_command("echo b")).await.unwrap();
+        let task_c =
+            service.create_task(CreateTask::new("c").with_command("echo c")).await.unwrap();
 
         let mut workflow = Workflow::new("complex-cycle")
-            .with_step(
-                WorkflowStep::new("a")
-                    .with_task(task_a.id.clone())
-                    .with_dependency("c"),
-            )
-            .with_step(
-                WorkflowStep::new("b")
-                    .with_task(task_b.id.clone())
-                    .with_dependency("a"),
-            )
-            .with_step(
-                WorkflowStep::new("c")
-                    .with_task(task_c.id.clone())
-                    .with_dependency("b"),
-            );
+            .with_step(WorkflowStep::new("a").with_task(task_a.id.clone()).with_dependency("c"))
+            .with_step(WorkflowStep::new("b").with_task(task_b.id.clone()).with_dependency("a"))
+            .with_step(WorkflowStep::new("c").with_task(task_c.id.clone()).with_dependency("b"));
 
         let err = workflow.build_dag().unwrap_err();
-        assert!(
-            err.contains("cycle"),
-            "a → b → c → a must be detected as a cycle, got: {err}"
-        );
+        assert!(err.contains("cycle"), "a → b → c → a must be detected as a cycle, got: {err}");
     }
 
     // -----------------------------------------------------------------------
@@ -305,18 +229,12 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_independent_tasks_topological_sort() {
         let service = setup_service();
-        let task_a = service
-            .create_task(CreateTask::new("alpha").with_command("echo alpha"))
-            .await
-            .unwrap();
-        let task_b = service
-            .create_task(CreateTask::new("beta").with_command("echo beta"))
-            .await
-            .unwrap();
-        let task_c = service
-            .create_task(CreateTask::new("gamma").with_command("echo gamma"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("alpha").with_command("echo alpha")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("beta").with_command("echo beta")).await.unwrap();
+        let task_c =
+            service.create_task(CreateTask::new("gamma").with_command("echo gamma")).await.unwrap();
         let _ = (task_a, task_b, task_c);
 
         let sorted = service.list_tasks_sorted(None, None).await.unwrap();
@@ -330,39 +248,21 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_fork_dag_workflow() {
         let service = setup_service_with_cache();
-        let task_a = service
-            .create_task(CreateTask::new("root").with_command("echo root"))
-            .await
-            .unwrap();
-        let task_b = service
-            .create_task(CreateTask::new("b1").with_command("echo b1"))
-            .await
-            .unwrap();
-        let task_c = service
-            .create_task(CreateTask::new("b2").with_command("echo b2"))
-            .await
-            .unwrap();
-        let task_d = service
-            .create_task(CreateTask::new("b3").with_command("echo b3"))
-            .await
-            .unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("root").with_command("echo root")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("b1").with_command("echo b1")).await.unwrap();
+        let task_c =
+            service.create_task(CreateTask::new("b2").with_command("echo b2")).await.unwrap();
+        let task_d =
+            service.create_task(CreateTask::new("b3").with_command("echo b3")).await.unwrap();
 
         let workflow = Workflow::new("fork")
             .with_step(WorkflowStep::new("root").with_task(task_a.id.clone()))
+            .with_step(WorkflowStep::new("b1").with_task(task_b.id.clone()).with_dependency("root"))
+            .with_step(WorkflowStep::new("b2").with_task(task_c.id.clone()).with_dependency("root"))
             .with_step(
-                WorkflowStep::new("b1")
-                    .with_task(task_b.id.clone())
-                    .with_dependency("root"),
-            )
-            .with_step(
-                WorkflowStep::new("b2")
-                    .with_task(task_c.id.clone())
-                    .with_dependency("root"),
-            )
-            .with_step(
-                WorkflowStep::new("b3")
-                    .with_task(task_d.id.clone())
-                    .with_dependency("root"),
+                WorkflowStep::new("b3").with_task(task_d.id.clone()).with_dependency("root"),
             );
 
         let created = service.create_workflow(workflow).await.unwrap();
@@ -392,12 +292,10 @@ mod dependency_cycles {
     #[tokio::test]
     async fn test_single_step_workflow() {
         let service = setup_service_with_cache();
-        let task = service
-            .create_task(CreateTask::new("solo").with_command("echo solo"))
-            .await
-            .unwrap();
-        let workflow = Workflow::new("single")
-            .with_step(WorkflowStep::new("only").with_task(task.id.clone()));
+        let task =
+            service.create_task(CreateTask::new("solo").with_command("echo solo")).await.unwrap();
+        let workflow =
+            Workflow::new("single").with_step(WorkflowStep::new("only").with_task(task.id.clone()));
         let created = service.create_workflow(workflow).await.unwrap();
         let results = service.execute_workflow(&created.id, false).await.unwrap();
         assert_eq!(results.len(), 1);
@@ -429,9 +327,7 @@ mod retry_storm {
             max_delay: Duration::from_secs(1),
             jitter: 0.0,
         };
-        let cmd = CreateTask::new(name)
-            .with_command("echo ok")
-            .with_retry_policy(policy);
+        let cmd = CreateTask::new(name).with_command("echo ok").with_retry_policy(policy);
         let task = service.create_task(cmd).await.unwrap();
         let mut failed = task;
         failed.state = TaskState::Failed;
@@ -442,11 +338,7 @@ mod retry_storm {
     }
 
     async fn taskclone_for_retry(service: &TaskService, task_id: &TaskId) -> Task {
-        service
-            .get_task(task_id)
-            .await
-            .unwrap()
-            .expect("task must exist")
+        service.get_task(task_id).await.unwrap().expect("task must exist")
     }
 
     async fn refail_task(service: &TaskService, task_id: &TaskId) {
@@ -485,9 +377,8 @@ mod retry_storm {
             jitter: 0.0,
         };
 
-        let cmd = CreateTask::new("retry-cycle")
-            .with_command("echo hello")
-            .with_retry_policy(policy);
+        let cmd =
+            CreateTask::new("retry-cycle").with_command("echo hello").with_retry_policy(policy);
         let task = service.create_task(cmd).await.unwrap();
         let result = service.run_task(&task.id, false).await.unwrap();
         assert!(result.success, "first run must succeed");
@@ -522,7 +413,10 @@ mod retry_storm {
 
         let err = service.retry_task(task.id.clone()).await.unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("limit") || msg.contains("Retry"), "error must mention retry limit, got: {msg}");
+        assert!(
+            msg.contains("limit") || msg.contains("Retry"),
+            "error must mention retry limit, got: {msg}"
+        );
     }
 
     #[tokio::test]
@@ -544,7 +438,10 @@ mod retry_storm {
 
         let err = service.retry_task(task.id.clone()).await.unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("limit") || msg.contains("Retry"), "error must mention retry limit, got: {msg}");
+        assert!(
+            msg.contains("limit") || msg.contains("Retry"),
+            "error must mention retry limit, got: {msg}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -561,9 +458,7 @@ mod retry_storm {
             jitter: 0.0,
         };
 
-        let cmd = CreateTask::new("successful")
-            .with_command("echo ok")
-            .with_retry_policy(policy);
+        let cmd = CreateTask::new("successful").with_command("echo ok").with_retry_policy(policy);
         let task = service.create_task(cmd).await.unwrap();
         service.run_task(&task.id, false).await.unwrap();
 
@@ -585,7 +480,7 @@ mod retry_storm {
 
         let mut task_ids = Vec::with_capacity(count);
         for i in 0..count {
-            let task = make_failed_task(&service, &format!("storm-{}", i), 5).await;
+            let task = make_failed_task(&service, &format!("storm-{i}"), 5).await;
             task_ids.push(task.id.clone());
         }
 
@@ -602,7 +497,10 @@ mod retry_storm {
                 Ok(task) => {
                     successes += 1;
                     assert_eq!(task.state, TaskState::Pending, "each retried task must be Pending");
-                    assert_eq!(task.retry_count, 1, "each task must have retry_count = 1 after first retry");
+                    assert_eq!(
+                        task.retry_count, 1,
+                        "each task must have retry_count = 1 after first retry"
+                    );
                 }
                 Err(e) => {
                     eprintln!("retry storm task failed: {e}");
@@ -610,7 +508,7 @@ mod retry_storm {
             }
         }
 
-        assert_eq!(successes, count as usize, "all {count} concurrent retries must succeed");
+        assert_eq!(successes, count, "all {count} concurrent retries must succeed");
     }
 
     // -----------------------------------------------------------------------
@@ -623,11 +521,11 @@ mod retry_storm {
 
         let mut transient_ids = Vec::with_capacity(5);
         for i in 0..5 {
-            transient_ids.push(make_failed_task(&service, &format!("trans-{}", i), 3).await);
+            transient_ids.push(make_failed_task(&service, &format!("trans-{i}"), 3).await);
         }
         let mut permanent_ids = Vec::with_capacity(5);
         for i in 0..5 {
-            permanent_ids.push(make_failed_task(&service, &format!("perm-{}", i), 1).await);
+            permanent_ids.push(make_failed_task(&service, &format!("perm-{i}"), 1).await);
         }
 
         async fn retry_all(
@@ -649,11 +547,8 @@ mod retry_storm {
             results
         }
 
-        let all_ids: Vec<TaskId> = transient_ids
-            .iter()
-            .chain(permanent_ids.iter())
-            .map(|t| t.id.clone())
-            .collect();
+        let all_ids: Vec<TaskId> =
+            transient_ids.iter().chain(permanent_ids.iter()).map(|t| t.id.clone()).collect();
 
         let wave1 = retry_all(&service, &all_ids).await;
         let wave1_ok = wave1.iter().filter(|r| r.is_ok()).count();
@@ -750,7 +645,7 @@ mod retry_storm {
 
         let mut task_ids = Vec::with_capacity(count);
         for i in 0..count {
-            let task = make_failed_task(&service, &format!("run-retry-{}", i), 3).await;
+            let task = make_failed_task(&service, &format!("run-retry-{i}"), 3).await;
             task_ids.push(task.id.clone());
         }
 

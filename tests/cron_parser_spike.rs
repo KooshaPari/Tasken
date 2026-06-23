@@ -12,18 +12,13 @@
 mod cron_parser_spike;
 
 use chrono::{TimeZone, Utc};
-
 use cron_parser_spike::{CronError, CronExpr, CronParser};
 
 #[test]
 fn test_cron_parser_spike_can_parse_every_minute() {
     let mut parser = CronParser::default();
     let result = parser.parse("* * * * *");
-    assert!(
-        result.is_ok(),
-        "expected parse(\"* * * * *\") to succeed, got {:?}",
-        result
-    );
+    assert!(result.is_ok(), "expected parse(\"* * * * *\") to succeed, got {result:?}");
     let expr = result.unwrap();
     assert_eq!(expr.expression, "* * * * *");
     assert!(expr.is_every_minute());
@@ -33,14 +28,10 @@ fn test_cron_parser_spike_can_parse_every_minute() {
 fn test_cron_parser_spike_rejects_unknown() {
     let mut parser = CronParser::default();
     let result = parser.parse("@hourly");
-    assert!(
-        result.is_err(),
-        "expected parse(\"@hourly\") to fail, got {:?}",
-        result
-    );
+    assert!(result.is_err(), "expected parse(\"@hourly\") to fail, got {result:?}");
     match result.unwrap_err() {
         CronError::NotImplemented(expr) => assert_eq!(expr, "@hourly"),
-        other => panic!("expected CronError::NotImplemented, got {:?}", other),
+        other => panic!("expected CronError::NotImplemented, got {other:?}"),
     }
 }
 
@@ -50,17 +41,11 @@ fn test_cron_parser_spike_matches_in_range() {
     parser.parse("* * * * *").expect("spike should accept every-minute");
 
     let instant = Utc.with_ymd_and_hms(2026, 6, 15, 12, 34, 56).unwrap();
-    assert!(
-        parser.matches(instant),
-        "spike should report match for known time"
-    );
+    assert!(parser.matches(instant), "spike should report match for known time");
 
     let next = parser.next_after(instant);
     assert!(next.is_some(), "next_after should return Some for parsed expr");
-    assert!(
-        next.unwrap() > instant,
-        "next_after must be strictly after the base instant"
-    );
+    assert!(next.unwrap() > instant, "next_after must be strictly after the base instant");
 }
 
 #[test]
@@ -79,13 +64,12 @@ fn test_cron_parser_spike_is_every_minute_predicate() {
 fn test_cron_parser_spike_rejects_blank_and_various() {
     let mut parser = CronParser::default();
     // All non-every-minute expressions must yield NotImplemented in the spike.
-    for input in &["", "*/5 * * * *", "0 0 * * *", "0 9 * * 1-5", "@daily", "@reboot", "0 0 1 1 0"] {
+    for input in &["", "*/5 * * * *", "0 0 * * *", "0 9 * * 1-5", "@daily", "@reboot", "0 0 1 1 0"]
+    {
         let result = parser.parse(input);
         assert!(
             matches!(result, Err(CronError::NotImplemented(_))),
-            "expected NotImplemented for {:?}, got {:?}",
-            input,
-            result
+            "expected NotImplemented for {input:?}, got {result:?}"
         );
     }
 }
@@ -136,8 +120,8 @@ fn test_cron_parser_spike_error_display_messages() {
     let not_impl = CronError::NotImplemented("@weekly".to_string());
     let invalid = CronError::Invalid("oops".to_string());
     // Display must mention the offending expression for both variants.
-    assert!(format!("{}", not_impl).contains("@weekly"));
-    assert!(format!("{}", invalid).contains("oops"));
+    assert!(format!("{not_impl}").contains("@weekly"));
+    assert!(format!("{invalid}").contains("oops"));
 }
 
 #[test]
@@ -147,5 +131,5 @@ fn test_cron_parser_spike_invalid_variant_distinct() {
     let not_impl = CronError::NotImplemented("x".to_string());
     let invalid = CronError::Invalid("x".to_string());
     assert_ne!(not_impl, invalid);
-    assert_ne!(format!("{:?}", not_impl), format!("{:?}", invalid));
+    assert_ne!(format!("{not_impl:?}"), format!("{:?}", invalid));
 }

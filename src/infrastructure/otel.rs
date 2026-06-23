@@ -176,18 +176,10 @@ impl RouterSpanAttributes {
     /// (helpful for snapshot/golden tests).
     pub fn iter(&self) -> impl Iterator<Item = (&'static str, AttrValue<'_>)> {
         [
-            self.provider
-                .as_deref()
-                .map(|v| ("provider", AttrValue::Str(v))),
-            self.model
-                .as_deref()
-                .map(|v| ("model", AttrValue::Str(v))),
-            self.plugin_name
-                .as_deref()
-                .map(|v| ("plugin_name", AttrValue::Str(v))),
-            self.decision_reason
-                .as_deref()
-                .map(|v| ("decision_reason", AttrValue::Str(v))),
+            self.provider.as_deref().map(|v| ("provider", AttrValue::Str(v))),
+            self.model.as_deref().map(|v| ("model", AttrValue::Str(v))),
+            self.plugin_name.as_deref().map(|v| ("plugin_name", AttrValue::Str(v))),
+            self.decision_reason.as_deref().map(|v| ("decision_reason", AttrValue::Str(v))),
             self.latency_ms.map(|v| ("latency_ms", AttrValue::F64(v))),
             self.cost_usd.map(|v| ("cost_usd", AttrValue::F64(v))),
             self.status_code.map(|v| ("status_code", AttrValue::I64(i64::from(v)))),
@@ -457,13 +449,15 @@ pub use opentelemetry;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::{Arc, Mutex};
+
     use tracing::field::Visit;
     use tracing::span::{Attributes, Id, Record};
     use tracing::{Event, Subscriber};
     use tracing_subscriber::layer::{Context, Layer};
     use tracing_subscriber::Registry;
+
+    use super::*;
 
     /// Test subscriber state: captures both span field recordings AND
     /// `tracing::info!` events as (field_name, value) pairs / strings.
@@ -495,7 +489,11 @@ mod tests {
         fn on_record(&self, _id: &Id, values: &Record<'_>, _ctx: Context<'_, S>) {
             struct V(Vec<(String, String)>);
             impl Visit for V {
-                fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
                     self.0.push((field.name().to_string(), format!("{value:?}")));
                 }
                 fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
@@ -516,17 +514,17 @@ mod tests {
             }
             let mut visitor = V(Vec::new());
             values.record(&mut visitor);
-            self.captured
-                .lock()
-                .expect("captured mutex poisoned")
-                .field_records
-                .extend(visitor.0);
+            self.captured.lock().expect("captured mutex poisoned").field_records.extend(visitor.0);
         }
 
         fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
             struct V(String);
             impl Visit for V {
-                fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
                     if field.name() == "message" {
                         self.0 = format!("{value:?}");
                     } else if self.0.is_empty() {
@@ -544,11 +542,7 @@ mod tests {
             }
             let mut visitor = V(String::new());
             event.record(&mut visitor);
-            self.captured
-                .lock()
-                .expect("captured mutex poisoned")
-                .events
-                .push(visitor.0);
+            self.captured.lock().expect("captured mutex poisoned").events.push(visitor.0);
         }
     }
 
@@ -585,9 +579,7 @@ mod tests {
         // Helper: returns true iff a record for `field` with `value_substr`
         // exists in the captured list.
         let has_record = |field: &str, value_substr: &str| -> bool {
-            cap.field_records
-                .iter()
-                .any(|(k, v)| k == field && v.contains(value_substr))
+            cap.field_records.iter().any(|(k, v)| k == field && v.contains(value_substr))
         };
 
         // Constructor-populated attributes:
@@ -706,11 +698,7 @@ mod tests {
         // Additionally, `record_task_state` records `task.state` as an
         // attribute. The last value wins (overwritten on each call), so
         // we should see "Completed" as the final recorded value.
-        let final_state = cap
-            .field_records
-            .iter()
-            .rev()
-            .find(|(k, _)| k == "task.state");
+        let final_state = cap.field_records.iter().rev().find(|(k, _)| k == "task.state");
         assert!(
             final_state.is_some(),
             "missing 'task.state' field record; got: {:?}",
@@ -718,10 +706,7 @@ mod tests {
         );
         let (k, v) = final_state.expect("just checked is_some");
         assert_eq!(k, "task.state");
-        assert!(
-            v.contains("Completed"),
-            "expected last task.state to be 'Completed', got: {v:?}"
-        );
+        assert!(v.contains("Completed"), "expected last task.state to be 'Completed', got: {v:?}");
     }
 
     // -- Additional sanity tests (cheap, keep coverage tight) --
@@ -730,20 +715,13 @@ mod tests {
     fn kind_names_match_schema() {
         assert_eq!(RouterSpanKind::Decision.as_str(), "router.decision");
         assert_eq!(RouterSpanKind::Plugin.as_str(), "router.plugin");
-        assert_eq!(
-            RouterSpanKind::ProviderCall.as_str(),
-            "router.provider_call"
-        );
+        assert_eq!(RouterSpanKind::ProviderCall.as_str(), "router.provider_call");
         assert_eq!(RouterSpanKind::HotReload.as_str(), "router.hot_reload");
     }
 
     #[test]
     fn otlp_kind_is_internal_or_client() {
-        for k in [
-            RouterSpanKind::Decision,
-            RouterSpanKind::Plugin,
-            RouterSpanKind::HotReload,
-        ] {
+        for k in [RouterSpanKind::Decision, RouterSpanKind::Plugin, RouterSpanKind::HotReload] {
             assert_eq!(k.otlp_kind(), 1, "{k:?}");
         }
         assert_eq!(RouterSpanKind::ProviderCall.otlp_kind(), 3);
@@ -758,10 +736,8 @@ mod tests {
 
     #[test]
     fn attributes_iter_is_deterministic() {
-        let a = RouterSpanAttributes::new()
-            .provider("openai")
-            .model("gpt-4o-mini")
-            .latency_ms(123.4);
+        let a =
+            RouterSpanAttributes::new().provider("openai").model("gpt-4o-mini").latency_ms(123.4);
 
         let kvs: Vec<&'static str> = a.iter().map(|(k, _)| k).collect();
         assert_eq!(kvs, vec!["provider", "model", "latency_ms"]);
@@ -786,10 +762,7 @@ mod tests {
     fn end_to_end_error_span() {
         let span = TracingOtelSpan::new(
             RouterSpanKind::ProviderCall,
-            RouterSpanAttributes::new()
-                .provider("openai")
-                .model("gpt-4o")
-                .status_code(429),
+            RouterSpanAttributes::new().provider("openai").model("gpt-4o").status_code(429),
         );
         span.record_latency_ms(1_250.0);
         span.set_error("rate limit exceeded");
