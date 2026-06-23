@@ -6,13 +6,15 @@
 //! expiration and falls back to an ephemeral (in-memory) cache when
 //! disk storage is unavailable (e.g., in test environments).
 
-use crate::domain::tasks::{TaskId, TaskResult};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use serde::{Deserialize, Serialize};
+
+use crate::domain::tasks::{TaskId, TaskResult};
 
 /// A single entry in the persistent cache.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,10 +231,8 @@ impl PersistentTaskCache {
 
         // Atomically write via temp file to avoid corruption
         let tmp_path = path.with_extension("cache.tmp");
-        fs::write(&tmp_path, &json)
-            .map_err(|e| format!("cache write failed: {e}"))?;
-        fs::rename(&tmp_path, &path)
-            .map_err(|e| format!("cache rename failed: {e}"))?;
+        fs::write(&tmp_path, &json).map_err(|e| format!("cache write failed: {e}"))?;
+        fs::rename(&tmp_path, &path).map_err(|e| format!("cache rename failed: {e}"))?;
 
         Ok(())
     }
@@ -248,8 +248,9 @@ impl Default for PersistentTaskCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Duration;
+
+    use super::*;
 
     fn make_result(id: &str) -> TaskResult {
         TaskResult {
@@ -333,7 +334,8 @@ mod tests {
 
     #[test]
     fn test_disk_cache_expired_on_reload() {
-        let dir = std::env::temp_dir().join(format!("taskkit-cache-expired-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("taskkit-cache-expired-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("cache.json");
 
@@ -341,7 +343,11 @@ mod tests {
         {
             let cache = PersistentTaskCache::open(&path, Duration::from_secs(0)).unwrap();
             cache
-                .insert_with_ttl(TaskId::from_string("expired"), make_result("expired"), Duration::from_secs(0))
+                .insert_with_ttl(
+                    TaskId::from_string("expired"),
+                    make_result("expired"),
+                    Duration::from_secs(0),
+                )
                 .unwrap();
         }
 

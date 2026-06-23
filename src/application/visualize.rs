@@ -75,9 +75,7 @@ impl std::str::FromStr for GraphFormat {
         match s.to_lowercase().as_str() {
             "dot" => Ok(GraphFormat::Dot),
             "mermaid" => Ok(GraphFormat::Mermaid),
-            other => Err(format!(
-                "Unknown format `{other}`. Supported formats: dot, mermaid"
-            )),
+            other => Err(format!("Unknown format `{other}`. Supported formats: dot, mermaid")),
         }
     }
 }
@@ -125,9 +123,7 @@ pub fn generate_mermaid(tasks: &[RecipeTask]) -> String {
         if task.depends_on.is_empty() {
             // Isolated node — declare it so it appears in the diagram
             let name = escape_mermaid_id(&task.name);
-            output.push_str(&format!("    {name}[{label}]\n",
-                label = mermaid_label(&task.name)
-            ));
+            output.push_str(&format!("    {name}[{label}]\n", label = mermaid_label(&task.name)));
         } else {
             for dep in &task.depends_on {
                 let from = escape_mermaid_id(dep);
@@ -179,8 +175,9 @@ fn mermaid_label(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
+
+    use super::*;
 
     fn make_task(name: &str, deps: Vec<&str>) -> RecipeTask {
         RecipeTask {
@@ -199,7 +196,10 @@ mod tests {
     #[test]
     fn test_dot_empty_tasks() {
         let dot = generate_dot(&[]);
-        assert_eq!(dot, "digraph G {\n    rankdir=LR;\n    node [shape=box, style=rounded];\n\n}\n");
+        assert_eq!(
+            dot,
+            "digraph G {\n    rankdir=LR;\n    node [shape=box, style=rounded];\n\n}\n"
+        );
     }
 
     #[test]
@@ -256,11 +256,7 @@ mod tests {
 
     #[test]
     fn test_dot_no_edges_for_isolated_tasks() {
-        let tasks = vec![
-            make_task("a", vec![]),
-            make_task("b", vec![]),
-            make_task("c", vec![]),
-        ];
+        let tasks = vec![make_task("a", vec![]), make_task("b", vec![]), make_task("c", vec![])];
         let dot = generate_dot(&tasks);
         for task in &tasks {
             assert!(dot.contains(&format!("\"{name}\";", name = task.name)));
@@ -287,10 +283,7 @@ mod tests {
 
     #[test]
     fn test_mermaid_simple_dag() {
-        let tasks = vec![
-            make_task("lint", vec![]),
-            make_task("build", vec!["lint"]),
-        ];
+        let tasks = vec![make_task("lint", vec![]), make_task("build", vec!["lint"])];
         let mermaid = generate_mermaid(&tasks);
         assert!(mermaid.contains("lint --> build"));
     }

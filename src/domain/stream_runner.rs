@@ -18,11 +18,13 @@
 //! The streams are exposed as `Bytes` (lossless) and as `String`
 //! (UTF-8 lossy) so the caller can choose.
 
+use std::time::{Duration, Instant};
+
+use async_trait::async_trait;
+
 use crate::domain::errors::TaskError;
 use crate::domain::runners::TaskRunner;
 use crate::domain::tasks::{Task, TaskState};
-use async_trait::async_trait;
-use std::time::{Duration, Instant};
 
 /// A task result with strict stdout/stderr separation.
 ///
@@ -131,9 +133,7 @@ impl StreamRunner {
             .get("command")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| {
-                TaskError::InvalidOperation("No command in task.data['command']".into())
-            })
+            .ok_or_else(|| TaskError::InvalidOperation("No command in task.data['command']".into()))
     }
 }
 
@@ -222,10 +222,7 @@ impl TaskRunner for StreamRunner {
         let stdout_bytes = stdout_buf;
         let stderr_bytes = stderr_buf;
 
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| TaskError::ExecutionFailed(e.to_string()))?;
+        let status = child.wait().await.map_err(|e| TaskError::ExecutionFailed(e.to_string()))?;
         let duration = start.elapsed();
         let success = status.success();
 
@@ -329,7 +326,8 @@ mod tests {
 
     #[test]
     fn test_stream_result_empty() {
-        let r = StreamResult::from_parts("t1", true, Some(0), Vec::new(), Vec::new(), Duration::ZERO);
+        let r =
+            StreamResult::from_parts("t1", true, Some(0), Vec::new(), Vec::new(), Duration::ZERO);
         assert!(!r.has_stderr());
         assert!(!r.has_stdout());
     }
@@ -441,9 +439,7 @@ mod tests {
         // Emit a single null byte on stdout; ensure it's preserved.
         let task = make_task_with_command("printf '\\x00'");
         let result = runner.execute_async(task).await.unwrap();
-        let stdout_bytes = result.output.unwrap()["stdout_bytes"]
-            .as_u64()
-            .unwrap();
+        let stdout_bytes = result.output.unwrap()["stdout_bytes"].as_u64().unwrap();
         assert_eq!(stdout_bytes, 1);
     }
 }

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task runner implementations.
 
+use std::time::{Duration, Instant};
+
+use async_trait::async_trait;
+
 use super::errors::TaskError;
 use super::tasks::{Task, TaskState};
 use super::TaskResult;
-use async_trait::async_trait;
-use std::time::{Duration, Instant};
 
 /// Trait for task runners.
 #[async_trait]
@@ -85,9 +87,7 @@ impl Default for AsyncRunner {
 impl TaskRunner for AsyncRunner {
     fn execute(&self, _task: &mut Task) -> Result<TaskResult, TaskError> {
         // Cannot execute async runner synchronously
-        Err(TaskError::InvalidOperation(
-            "AsyncRunner requires async execution".to_string(),
-        ))
+        Err(TaskError::InvalidOperation("AsyncRunner requires async execution".to_string()))
     }
 
     async fn execute_async(self: Box<Self>, mut task: Task) -> Result<TaskResult, TaskError> {
@@ -113,9 +113,7 @@ pub struct BackgroundRunner {
 
 impl BackgroundRunner {
     pub fn new() -> Self {
-        Self {
-            queue: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
-        }
+        Self { queue: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())) }
     }
 
     pub fn enqueue(&self, task: Task) {
@@ -136,9 +134,7 @@ impl Default for BackgroundRunner {
 #[async_trait]
 impl TaskRunner for BackgroundRunner {
     fn execute(&self, _task: &mut Task) -> Result<TaskResult, TaskError> {
-        Err(TaskError::InvalidOperation(
-            "BackgroundRunner requires async execution".to_string(),
-        ))
+        Err(TaskError::InvalidOperation("BackgroundRunner requires async execution".to_string()))
     }
 
     async fn execute_async(self: Box<Self>, mut task: Task) -> Result<TaskResult, TaskError> {

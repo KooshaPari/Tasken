@@ -3,7 +3,6 @@
 //!
 //! Uses the `notify` crate with debounce support to coalesce rapid changes.
 
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::{
@@ -11,6 +10,8 @@ use std::sync::{
     Arc,
 };
 use std::time::{Duration, Instant};
+
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 /// Minimum interval between consecutive callback invocations (debounce).
 const DEFAULT_DEBOUNCE_MS: u64 = 500;
@@ -32,10 +33,7 @@ impl Default for FileWatcher {
 impl FileWatcher {
     /// Create a new `FileWatcher` with default debounce (500 ms).
     pub fn new() -> Self {
-        Self {
-            running: Arc::new(AtomicBool::new(false)),
-            debounce_ms: DEFAULT_DEBOUNCE_MS,
-        }
+        Self { running: Arc::new(AtomicBool::new(false)), debounce_ms: DEFAULT_DEBOUNCE_MS }
     }
 
     /// Set a custom debounce interval in milliseconds.
@@ -63,9 +61,7 @@ impl FileWatcher {
 
         // If path is a file, watch its parent directory instead.
         let watch_path: PathBuf = if path.is_file() {
-            path.parent()
-                .unwrap_or_else(|| Path::new("."))
-                .to_path_buf()
+            path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
         } else {
             path.to_path_buf()
         };
@@ -128,12 +124,14 @@ fn is_relevant_event(event: &Event) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use notify::event::EventAttributes;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::sync::Arc;
+
+    use notify::event::EventAttributes;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_is_relevant_event_create() {
@@ -158,7 +156,9 @@ mod tests {
     #[test]
     fn test_is_relevant_event_modify() {
         let event = Event {
-            kind: EventKind::Modify(notify::event::ModifyKind::Data(notify::event::DataChange::Any)),
+            kind: EventKind::Modify(notify::event::ModifyKind::Data(
+                notify::event::DataChange::Any,
+            )),
             paths: vec![PathBuf::from("/tmp/test")],
             attrs: EventAttributes::new(),
         };
@@ -168,7 +168,9 @@ mod tests {
     #[test]
     fn test_is_relevant_event_access() {
         let event = Event {
-            kind: EventKind::Access(notify::event::AccessKind::Close(notify::event::AccessMode::Any)),
+            kind: EventKind::Access(notify::event::AccessKind::Close(
+                notify::event::AccessMode::Any,
+            )),
             paths: vec![PathBuf::from("/tmp/test")],
             attrs: EventAttributes::new(),
         };
@@ -177,11 +179,7 @@ mod tests {
 
     #[test]
     fn test_is_relevant_event_other() {
-        let event = Event {
-            kind: EventKind::Other,
-            paths: vec![],
-            attrs: EventAttributes::new(),
-        };
+        let event = Event { kind: EventKind::Other, paths: vec![], attrs: EventAttributes::new() };
         assert!(!is_relevant_event(&event));
     }
 

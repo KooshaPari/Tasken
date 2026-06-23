@@ -178,9 +178,7 @@ pub struct PluginRegistry {
 impl PluginRegistry {
     /// Create an empty registry (no plugins).
     pub fn new() -> Self {
-        Self {
-            plugins: Vec::new(),
-        }
+        Self { plugins: Vec::new() }
     }
 
     /// Create a registry pre-populated with the default plugins:
@@ -264,10 +262,7 @@ impl RunnerPlugin for ShellPlugin {
     fn execute(&self, ctx: PluginContext<'_>) -> PluginResult {
         let start = Instant::now();
 
-        let output = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(ctx.command)
-            .output();
+        let output = std::process::Command::new("sh").arg("-c").arg(ctx.command).output();
 
         let duration = start.elapsed();
 
@@ -558,9 +553,7 @@ mod tests {
 
     #[test]
     fn test_plugin_context_with_env() {
-        let ctx = PluginContext::new("test")
-            .with_env("PATH", "/usr/bin")
-            .with_env("HOME", "/root");
+        let ctx = PluginContext::new("test").with_env("PATH", "/usr/bin").with_env("HOME", "/root");
         assert_eq!(ctx.env_vars.len(), 2);
     }
 

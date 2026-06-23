@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Port definitions - interfaces for external dependencies.
 
+use async_trait::async_trait;
+
 use super::errors::PortError;
 use super::{Group, Schedule, Task, TaskResult, Workflow};
-use async_trait::async_trait;
 
 /// Port for task storage operations.
 #[async_trait]

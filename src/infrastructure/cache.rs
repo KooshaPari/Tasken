@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! In-memory cache for task results.
 
-use crate::domain::tasks::{TaskId, TaskResult};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use crate::domain::tasks::{TaskId, TaskResult};
 
 /// Cache entry with expiration.
 struct CacheEntry {
@@ -23,10 +24,7 @@ pub struct TaskCache {
 impl TaskCache {
     /// Create a new cache with default TTL.
     pub fn new(default_ttl: Duration) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(HashMap::new())),
-            default_ttl,
-        }
+        Self { inner: Arc::new(Mutex::new(HashMap::new())), default_ttl }
     }
 
     /// Get a cached result if present and not expired.
@@ -45,25 +43,14 @@ impl TaskCache {
         let mut map = self.inner.lock().unwrap();
         map.insert(
             task_id,
-            CacheEntry {
-                result,
-                inserted_at: Instant::now(),
-                ttl: self.default_ttl,
-            },
+            CacheEntry { result, inserted_at: Instant::now(), ttl: self.default_ttl },
         );
     }
 
     /// Insert with a custom TTL.
     pub fn insert_with_ttl(&self, task_id: TaskId, result: TaskResult, ttl: Duration) {
         let mut map = self.inner.lock().unwrap();
-        map.insert(
-            task_id,
-            CacheEntry {
-                result,
-                inserted_at: Instant::now(),
-                ttl,
-            },
-        );
+        map.insert(task_id, CacheEntry { result, inserted_at: Instant::now(), ttl });
     }
 
     /// Invalidate a cached entry.
@@ -98,8 +85,9 @@ impl Default for TaskCache {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Duration;
+
+    use super::*;
 
     #[test]
     fn test_cache_insert_and_get() {

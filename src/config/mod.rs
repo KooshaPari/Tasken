@@ -16,9 +16,10 @@
 //! | `TASKEN_CACHE_TTL_SECONDS` | `300` | Default cache TTL in seconds |
 //! | `TASKEN_DEFAULT_LIST_LIMIT` | `100` | Default limit for listing tasks |
 
-use serde::Deserialize;
 use std::path::PathBuf;
 use std::time::Duration;
+
+use serde::Deserialize;
 
 // ---------------------------------------------------------------------------
 // Configuration struct
@@ -58,9 +59,8 @@ pub struct TaskenConfig {
 
 impl Default for TaskenConfig {
     fn default() -> Self {
-        let default_data_dir = dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("taskkit");
+        let default_data_dir =
+            dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("taskkit");
 
         Self {
             data_dir: default_data_dir,
@@ -82,9 +82,7 @@ impl TaskenConfig {
         // Attempt to load .env file; ignore errors (no .env is not a failure).
         let _ = dotenvy::dotenv();
 
-        envy::prefixed("TASKEN_")
-            .from_env::<Self>()
-            .unwrap_or_default()
+        envy::prefixed("TASKEN_").from_env::<Self>().unwrap_or_default()
     }
 
     // ------------------------------------------------------------------
@@ -98,9 +96,7 @@ impl TaskenConfig {
 
     /// Absolute path to the cache directory.
     pub fn resolved_cache_dir(&self) -> PathBuf {
-        self.cache_dir
-            .clone()
-            .unwrap_or_else(|| self.data_dir.clone())
+        self.cache_dir.clone().unwrap_or_else(|| self.data_dir.clone())
     }
 
     /// Absolute path to the cache file.
@@ -144,10 +140,7 @@ mod tests {
     #[test]
     fn test_cache_path_with_override() {
         let custom = PathBuf::from("/tmp/tasken-cache");
-        let cfg = TaskenConfig {
-            cache_dir: Some(custom.clone()),
-            ..Default::default()
-        };
+        let cfg = TaskenConfig { cache_dir: Some(custom.clone()), ..Default::default() };
         assert_eq!(cfg.resolved_cache_dir(), custom);
         assert_eq!(cfg.cache_path(), custom.join("cache.json"));
     }

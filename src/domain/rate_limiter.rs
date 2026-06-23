@@ -20,6 +20,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
@@ -34,7 +35,7 @@ use tokio::time::Instant;
 pub struct TokenBucket {
     inner: Arc<Mutex<TokenBucketInner>>,
     capacity: u64,
-    refill_rate: f64,         // tokens per second
+    refill_rate: f64,          // tokens per second
     refill_interval: Duration, // how often we add tokens
 }
 
@@ -247,8 +248,9 @@ pub fn parse_rate_limit(s: &str) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Duration;
+
+    use super::*;
 
     // ------------------------------------------------------------------
     // TokenBucket unit tests
@@ -340,10 +342,7 @@ mod tests {
 
         // The consumer should have completed by now (refill at 10/s,
         // so ~100ms for 1 token)
-        assert!(
-            handle.await.is_ok(),
-            "consume should have completed after refill"
-        );
+        assert!(handle.await.is_ok(), "consume should have completed after refill");
     }
 
     #[tokio::test]

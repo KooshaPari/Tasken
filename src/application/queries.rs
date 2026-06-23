@@ -34,11 +34,7 @@ pub struct ListTasks {
 impl Default for ListTasks {
     fn default() -> Self {
         let cfg = TaskenConfig::default();
-        Self {
-            state_filter: None,
-            tag_filter: None,
-            limit: Some(cfg.default_list_limit),
-        }
+        Self { state_filter: None, tag_filter: None, limit: Some(cfg.default_list_limit) }
     }
 }
 
@@ -64,9 +60,7 @@ impl ListTasks {
 
     /// Execute the query.
     pub async fn execute(self, service: &TaskService) -> Result<Vec<Task>, TaskError> {
-        service
-            .list_tasks(self.state_filter, self.tag_filter, self.limit)
-            .await
+        service.list_tasks(self.state_filter, self.tag_filter, self.limit).await
     }
 }
 

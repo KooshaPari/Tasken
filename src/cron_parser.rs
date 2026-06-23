@@ -51,7 +51,7 @@ impl FromStr for Field {
             return Ok(Field::Any);
         }
         if let Some(rest) = s.strip_prefix("*/") {
-            let n: usize = rest.parse().map_err(|e| format!("bad */n: {}", e))?;
+            let n: usize = rest.parse().map_err(|e| format!("bad */n: {e}"))?;
             if n == 0 {
                 return Err("step cannot be 0".into());
             }
@@ -59,27 +59,34 @@ impl FromStr for Field {
         }
         if s.contains(',') {
             let vs: Result<Vec<usize>, _> = s.split(',').map(|p| p.parse()).collect();
-            return Ok(Field::Values(vs.map_err(|e| format!("bad list: {}", e))?));
+            return Ok(Field::Values(vs.map_err(|e| format!("bad list: {e}"))?));
         }
         if s.contains('-') {
             let parts: Vec<&str> = s.split('-').collect();
             if parts.len() != 2 {
-                return Err(format!("bad range: {}", s));
+                return Err(format!("bad range: {s}"));
             }
-            let start: usize = parts[0].parse().map_err(|e| format!("bad range start: {}", e))?;
-            let end: usize = parts[1].parse().map_err(|e| format!("bad range end: {}", e))?;
+            let start: usize = parts[0].parse().map_err(|e| format!("bad range start: {e}"))?;
+            let end: usize = parts[1].parse().map_err(|e| format!("bad range end: {e}"))?;
             if start > end {
-                return Err(format!("range start > end: {}", s));
+                return Err(format!("range start > end: {s}"));
             }
             return Ok(Field::Range(start, end, None));
         }
-        let n: usize = s.parse().map_err(|e| format!("bad field: {}", e))?;
+        let n: usize = s.parse().map_err(|e| format!("bad field: {e}"))?;
         Ok(Field::Values(vec![n]))
     }
 }
 
 impl CronExpr {
-    pub fn matches(&self, minute: usize, hour: usize, day: usize, month: usize, weekday: usize) -> bool {
+    pub fn matches(
+        &self,
+        minute: usize,
+        hour: usize,
+        day: usize,
+        month: usize,
+        weekday: usize,
+    ) -> bool {
         self.minute.matches(minute)
             && self.hour.matches(hour)
             && self.day.matches(day)

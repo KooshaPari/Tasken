@@ -1,61 +1,34 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Domain events for event sourcing.
 
+use chrono::{DateTime, Utc};
+
 use super::tasks::TaskId;
 use super::tasks::TaskState;
-use chrono::{DateTime, Utc};
 
 /// A task-related event.
 #[derive(Debug, Clone)]
 pub enum TaskEvent {
     /// Task state changed.
-    StateChanged {
-        task_id: TaskId,
-        from: TaskState,
-        to: TaskState,
-        timestamp: DateTime<Utc>,
-    },
+    StateChanged { task_id: TaskId, from: TaskState, to: TaskState, timestamp: DateTime<Utc> },
 
     /// Task execution started.
-    ExecutionStarted {
-        task_id: TaskId,
-        timestamp: DateTime<Utc>,
-    },
+    ExecutionStarted { task_id: TaskId, timestamp: DateTime<Utc> },
 
     /// Task execution completed.
-    ExecutionCompleted {
-        task_id: TaskId,
-        duration_ms: u64,
-        timestamp: DateTime<Utc>,
-    },
+    ExecutionCompleted { task_id: TaskId, duration_ms: u64, timestamp: DateTime<Utc> },
 
     /// Task execution failed.
-    ExecutionFailed {
-        task_id: TaskId,
-        error: String,
-        timestamp: DateTime<Utc>,
-    },
+    ExecutionFailed { task_id: TaskId, error: String, timestamp: DateTime<Utc> },
 
     /// Task was scheduled.
-    Scheduled {
-        task_id: TaskId,
-        scheduled_for: DateTime<Utc>,
-        timestamp: DateTime<Utc>,
-    },
+    Scheduled { task_id: TaskId, scheduled_for: DateTime<Utc>, timestamp: DateTime<Utc> },
 
     /// Task was retried.
-    Retried {
-        task_id: TaskId,
-        attempt: u32,
-        timestamp: DateTime<Utc>,
-    },
+    Retried { task_id: TaskId, attempt: u32, timestamp: DateTime<Utc> },
 
     /// Task was cancelled.
-    Cancelled {
-        task_id: TaskId,
-        reason: Option<String>,
-        timestamp: DateTime<Utc>,
-    },
+    Cancelled { task_id: TaskId, reason: Option<String>, timestamp: DateTime<Utc> },
 }
 
 /// Event kind for filtering.
@@ -120,25 +93,17 @@ impl serde::Serialize for TaskEvent {
         }
 
         let envelope = match self {
-            TaskEvent::StateChanged {
-                task_id,
-                from,
-                to,
-                timestamp,
-            } => EventEnvelope {
+            TaskEvent::StateChanged { task_id, from, to, timestamp } => EventEnvelope {
                 kind: "state_changed",
                 task_id: task_id.0.clone(),
                 from_state: Some(
-                    format!("{:?}", from)
+                    format!("{from:?}")
                         .to_lowercase()
                         .trim_start_matches("taskstate::")
                         .to_string(),
                 ),
                 to_state: Some(
-                    format!("{:?}", to)
-                        .to_lowercase()
-                        .trim_start_matches("taskstate::")
-                        .to_string(),
+                    format!("{to:?}").to_lowercase().trim_start_matches("taskstate::").to_string(),
                 ),
                 error: None,
                 duration_ms: None,
@@ -153,11 +118,7 @@ impl serde::Serialize for TaskEvent {
                 duration_ms: None,
                 timestamp: *timestamp,
             },
-            TaskEvent::ExecutionCompleted {
-                task_id,
-                duration_ms,
-                timestamp,
-            } => EventEnvelope {
+            TaskEvent::ExecutionCompleted { task_id, duration_ms, timestamp } => EventEnvelope {
                 kind: "execution_completed",
                 task_id: task_id.0.clone(),
                 from_state: None,
@@ -166,11 +127,7 @@ impl serde::Serialize for TaskEvent {
                 duration_ms: Some(*duration_ms),
                 timestamp: *timestamp,
             },
-            TaskEvent::ExecutionFailed {
-                task_id,
-                error,
-                timestamp,
-            } => EventEnvelope {
+            TaskEvent::ExecutionFailed { task_id, error, timestamp } => EventEnvelope {
                 kind: "execution_failed",
                 task_id: task_id.0.clone(),
                 from_state: None,
@@ -179,11 +136,7 @@ impl serde::Serialize for TaskEvent {
                 duration_ms: None,
                 timestamp: *timestamp,
             },
-            TaskEvent::Scheduled {
-                task_id,
-                scheduled_for: _,
-                timestamp,
-            } => EventEnvelope {
+            TaskEvent::Scheduled { task_id, scheduled_for: _, timestamp } => EventEnvelope {
                 kind: "scheduled",
                 task_id: task_id.0.clone(),
                 from_state: None,
@@ -192,11 +145,7 @@ impl serde::Serialize for TaskEvent {
                 duration_ms: None,
                 timestamp: *timestamp,
             },
-            TaskEvent::Retried {
-                task_id,
-                attempt,
-                timestamp,
-            } => EventEnvelope {
+            TaskEvent::Retried { task_id, attempt, timestamp } => EventEnvelope {
                 kind: "retried",
                 task_id: task_id.0.clone(),
                 from_state: None,
@@ -205,11 +154,7 @@ impl serde::Serialize for TaskEvent {
                 duration_ms: Some(*attempt as u64),
                 timestamp: *timestamp,
             },
-            TaskEvent::Cancelled {
-                task_id,
-                reason,
-                timestamp,
-            } => EventEnvelope {
+            TaskEvent::Cancelled { task_id, reason, timestamp } => EventEnvelope {
                 kind: "cancelled",
                 task_id: task_id.0.clone(),
                 from_state: None,

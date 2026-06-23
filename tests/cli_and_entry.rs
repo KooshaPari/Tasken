@@ -23,7 +23,11 @@ fn test_lib_version_is_non_empty() {
     // VERSION is a public const compiled from CARGO_PKG_VERSION.
     assert!(!taskkit::VERSION.is_empty(), "VERSION must not be empty");
     // Should contain at least one dot (semver-ish).
-    assert!(taskkit::VERSION.contains('.'), "VERSION should be semver-like, got: {}", taskkit::VERSION);
+    assert!(
+        taskkit::VERSION.contains('.'),
+        "VERSION should be semver-like, got: {}",
+        taskkit::VERSION
+    );
 }
 
 #[test]
@@ -215,7 +219,8 @@ fn test_cli_run_args_preserves_hyphen_prefixed_values() {
     // W3 SOTA feature #1: hyphen-prefixed forwarded args must be
     // preserved verbatim through compose_command. This is the entire
     // reason for the allow_hyphen_values=true on the CLI definition.
-    let forwarded = ForwardedArgs::from_slice(&["--release", "--target=x86_64", "--features", "tokio,serde"]);
+    let forwarded =
+        ForwardedArgs::from_slice(&["--release", "--target=x86_64", "--features", "tokio,serde"]);
     let composed = compose_command("cargo build", &forwarded);
     assert!(composed.starts_with("cargo build "));
     assert!(composed.contains("--release"));
@@ -248,7 +253,7 @@ fn test_cli_create_raw_quotes_args_even_without_base() {
 fn test_cli_forwarded_args_display_impl() {
     // ForwardedArgs implements Display via shell_quote.
     let f = ForwardedArgs::from_slice(&["plain", "with space"]);
-    let s = format!("{}", f);
+    let s = format!("{f}");
     assert_eq!(s, "plain 'with space'");
 }
 
@@ -291,10 +296,16 @@ async fn test_cli_list_command_with_combined_filters() {
     let all_pending = service.list_tasks(Some(TaskState::Pending), None, None).await.unwrap();
     assert_eq!(all_pending.len(), 3);
     // state=Pending + tag=urgent → 2 tasks.
-    let both = service.list_tasks(Some(TaskState::Pending), Some("urgent".to_string()), None).await.unwrap();
+    let both = service
+        .list_tasks(Some(TaskState::Pending), Some("urgent".to_string()), None)
+        .await
+        .unwrap();
     assert_eq!(both.len(), 2);
     // state=Completed + tag=urgent → 0 tasks.
-    let none = service.list_tasks(Some(TaskState::Completed), Some("urgent".to_string()), None).await.unwrap();
+    let none = service
+        .list_tasks(Some(TaskState::Completed), Some("urgent".to_string()), None)
+        .await
+        .unwrap();
     assert!(none.is_empty());
 }
 

@@ -20,6 +20,9 @@
 //! let result = runner.execute(&mut task);
 //! assert!(result.is_ok());
 //! ```
+#![allow(clippy::type_complexity)]
+#![allow(clippy::only_used_in_recursion)]
+#![allow(clippy::field_reassign_with_default)]
 
 pub mod adapters;
 pub mod application;
@@ -32,14 +35,17 @@ pub mod infrastructure;
 pub use application::services::TaskService;
 pub use config::TaskenConfig;
 pub use domain::errors::TaskError;
-pub use domain::{
-    NoopPlugin, PluginContext, PluginRegistry, PluginResult, RunnerPlugin, Schedule,
-    Scheduler, ShellPlugin, Task, TaskResult, TaskRunner, TaskState, Workflow,
-};
-pub use domain::tasks::{Priority, RetryPolicy, TaskId};
 pub use domain::groups::{Group, GroupId};
-pub use domain::recipes::{evaluate_condition, interpolate, interpolate_strict, predefined_vars, Settings, VarDefinition, VarType, Vars};
+pub use domain::recipes::{
+    evaluate_condition, interpolate, interpolate_strict, predefined_vars, Settings, VarDefinition,
+    VarType, Vars,
+};
 pub use domain::runners::{AsyncRunner, BackgroundRunner, SyncRunner};
+pub use domain::tasks::{Priority, RetryPolicy, TaskId};
+pub use domain::{
+    NoopPlugin, PluginContext, PluginRegistry, PluginResult, RunnerPlugin, Schedule, Scheduler,
+    ShellPlugin, Task, TaskResult, TaskRunner, TaskState, Workflow,
+};
 pub use infrastructure::{TaskCache, TaskKitError};
 
 /// Framework version

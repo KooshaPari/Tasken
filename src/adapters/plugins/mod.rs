@@ -61,9 +61,7 @@ pub struct PluginRegistry {
 
 impl PluginRegistry {
     pub fn new() -> Self {
-        Self {
-            plugins: std::collections::HashMap::new(),
-        }
+        Self { plugins: std::collections::HashMap::new() }
     }
 
     /// Register a plugin.

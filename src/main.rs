@@ -2,6 +2,7 @@
 //! Tasken CLI entry point.
 
 use std::sync::Arc;
+
 use taskkit::adapters::primary::cli::CliAdapter;
 use taskkit::adapters::secondary::file::FileStorage;
 use taskkit::application::services::TaskService;

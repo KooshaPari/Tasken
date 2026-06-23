@@ -65,9 +65,7 @@ impl CronParser {
     /// returns [`CronError::NotImplemented`].
     pub fn parse(&mut self, expr: &str) -> Result<CronExpr, CronError> {
         if expr == "* * * * *" {
-            let cron_expr = CronExpr {
-                expression: expr.to_string(),
-            };
+            let cron_expr = CronExpr { expression: expr.to_string() };
             self.inner = Some(cron_expr.clone());
             Ok(cron_expr)
         } else {

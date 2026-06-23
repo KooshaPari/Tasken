@@ -16,7 +16,7 @@ use taskkit::cron_parser::{CronExpr, Field};
 fn test_field_any_matches_anything() {
     let f = Field::Any;
     for v in [0usize, 1, 7, 30, 59, 100, usize::MAX] {
-        assert!(f.matches(v), "Field::Any should match {}", v);
+        assert!(f.matches(v), "Field::Any should match {v}");
     }
 }
 
@@ -24,45 +24,45 @@ fn test_field_any_matches_anything() {
 fn test_field_every_zero_steps_must_be_rejected() {
     // FromStr: */0 must error with the "step cannot be 0" message.
     let err = Field::from_str("*/0").unwrap_err();
-    assert!(err.contains("step cannot be 0"), "got: {}", err);
+    assert!(err.contains("step cannot be 0"), "got: {err}");
 }
 
 #[test]
 fn test_field_every_non_numeric_is_error() {
     // FromStr: */abc must surface a parse error.
     let err = Field::from_str("*/abc").unwrap_err();
-    assert!(err.contains("bad */n"), "got: {}", err);
+    assert!(err.contains("bad */n"), "got: {err}");
 }
 
 #[test]
 fn test_field_range_start_greater_than_end_is_error() {
     // FromStr: range with start > end must error.
     let err = Field::from_str("20-10").unwrap_err();
-    assert!(err.contains("range start > end"), "got: {}", err);
+    assert!(err.contains("range start > end"), "got: {err}");
 }
 
 #[test]
 fn test_field_range_with_more_than_two_dashes_is_error() {
     // FromStr: malformed range "1-2-3" must error.
     let err = Field::from_str("1-2-3").unwrap_err();
-    assert!(err.contains("bad range"), "got: {}", err);
+    assert!(err.contains("bad range"), "got: {err}");
 }
 
 #[test]
 fn test_field_range_non_numeric_start_or_end_errors() {
     // FromStr: range with non-numeric start.
     let err = Field::from_str("a-5").unwrap_err();
-    assert!(err.contains("bad range start"), "got: {}", err);
+    assert!(err.contains("bad range start"), "got: {err}");
     // FromStr: range with non-numeric end.
     let err = Field::from_str("5-z").unwrap_err();
-    assert!(err.contains("bad range end"), "got: {}", err);
+    assert!(err.contains("bad range end"), "got: {err}");
 }
 
 #[test]
 fn test_field_list_with_invalid_member_is_error() {
     // FromStr: a list with one bad member must surface a "bad list" error.
     let err = Field::from_str("1,2,abc,4").unwrap_err();
-    assert!(err.contains("bad list"), "got: {}", err);
+    assert!(err.contains("bad list"), "got: {err}");
 }
 
 #[test]
@@ -149,8 +149,7 @@ fn test_cron_expr_every_minute_matches_everything() {
                     for weekday in [0, 3, 6] {
                         assert!(
                             c.matches(minute, hour, day, month, weekday),
-                            "every-minute must match minute={} hour={} day={} month={} weekday={}",
-                            minute, hour, day, month, weekday
+                            "every-minute must match minute={minute} hour={hour} day={day} month={month} weekday={weekday}"
                         );
                     }
                 }
@@ -206,7 +205,7 @@ fn test_field_from_str_single_value_is_values_with_one_element() {
 fn test_field_from_str_non_numeric_single_value_errors() {
     // "not-a-number" contains '-' so it tries to parse as range first
     let err = Field::from_str("not-a-number").unwrap_err();
-    assert!(err.contains("bad range"), "got: {}", err);
+    assert!(err.contains("bad range"), "got: {err}");
 }
 
 #[test]

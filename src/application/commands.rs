@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task command definitions.
 
+use serde::Serialize;
+
 use super::super::domain::errors::TaskError;
 use super::super::domain::tasks::{Priority, RetryPolicy, Task, TaskId};
 use super::services::TaskService;
-use serde::Serialize;
 
 /// Command to create a new task.
 #[derive(Serialize)]
@@ -88,10 +89,7 @@ pub struct CancelTask {
 
 impl CancelTask {
     pub fn new(task_id: TaskId) -> Self {
-        Self {
-            task_id,
-            reason: None,
-        }
+        Self { task_id, reason: None }
     }
 
     pub fn with_reason(mut self, reason: impl Into<String>) -> Self {

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Task application service.
 
+use std::sync::Arc;
+
+use chrono::Utc;
+
 use super::commands::CreateTask;
 use crate::config::TaskenConfig;
 use crate::domain::errors::TaskError;
@@ -10,8 +14,6 @@ use crate::domain::rate_limiter::TokenBucket;
 use crate::domain::tasks::{Task, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowId};
 use crate::domain::{events::TaskEvent, Group, GroupId, TaskResult};
-use chrono::Utc;
-use std::sync::Arc;
 
 /// Task application service.
 pub struct TaskService {
@@ -57,13 +59,8 @@ impl TaskService {
             let _ = std::fs::create_dir_all(parent);
         }
 
-        let cache = crate::infrastructure::PersistentTaskCache::open(
-            &cache_path,
-            cache_ttl,
-        )
-        .unwrap_or_else(|_| {
-            crate::infrastructure::PersistentTaskCache::ephemeral(cache_ttl)
-        });
+        let cache = crate::infrastructure::PersistentTaskCache::open(&cache_path, cache_ttl)
+            .unwrap_or_else(|_| crate::infrastructure::PersistentTaskCache::ephemeral(cache_ttl));
         Self {
             storage,
             queue,
@@ -79,7 +76,13 @@ impl TaskService {
         queue: Arc<dyn QueuePort>,
         cache: Arc<crate::infrastructure::PersistentTaskCache>,
     ) -> Self {
-        Self { storage, queue, cache, plugins: Arc::new(PluginRegistry::with_defaults()), rate_limiter: Arc::new(tokio::sync::Mutex::new(None)) }
+        Self {
+            storage,
+            queue,
+            cache,
+            plugins: Arc::new(PluginRegistry::with_defaults()),
+            rate_limiter: Arc::new(tokio::sync::Mutex::new(None)),
+        }
     }
 
     /// Replace the default plugin registry with a custom one.
@@ -230,10 +233,7 @@ impl TaskService {
         self.queue.enqueue(task.clone()).await?;
 
         // In a real implementation, the queue worker would execute and store the result
-        Ok(task.success_result(
-            serde_json::json!({"status": "queued"}),
-            std::time::Duration::ZERO,
-        ))
+        Ok(task.success_result(serde_json::json!({"status": "queued"}), std::time::Duration::ZERO))
     }
 
     /// Run a task synchronously using the shell runner with disk-backed cache.
@@ -241,11 +241,7 @@ impl TaskService {
     /// When `dry_run` is `true`, the task command is printed to stderr
     /// and no side effects (shell execution, storage writes, caching)
     /// are performed. A simulated successful result is returned.
-    pub async fn run_task(
-        &self,
-        task_id: &TaskId,
-        dry_run: bool,
-    ) -> Result<TaskResult, TaskError> {
+    pub async fn run_task(&self, task_id: &TaskId, dry_run: bool) -> Result<TaskResult, TaskError> {
         // Apply rate limiter before execution (only in non-dry-run mode).
         if !dry_run {
             let bucket = { self.rate_limiter.lock().await.clone() };
@@ -268,13 +264,9 @@ impl TaskService {
             .ok_or_else(|| TaskError::NotFound(task_id.0.clone()))?;
 
         if dry_run {
-            let cmd = task
-                .data
-                .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let cmd = task.data.get("command").and_then(|v| v.as_str()).unwrap_or("");
             eprintln!("[dry-run] would run task '{}'", task_id.0);
-            eprintln!("[dry-run]   command: {}", cmd);
+            eprintln!("[dry-run]   command: {cmd}");
             return Ok(TaskResult {
                 task_id: task_id.clone(),
                 success: true,
@@ -290,17 +282,10 @@ impl TaskService {
         // Resolve command via the plugin registry.
         // Find the first plugin that can handle the command; the default
         // registry always includes ShellPlugin as a catch-all fallback.
-        let cmd = task
-            .data
-            .get("command")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+        let cmd = task.data.get("command").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
         let plugin = self.plugins.find(&cmd).ok_or_else(|| {
-            TaskError::InvalidOperation(
-                "No runner plugin can handle the command".to_string(),
-            )
+            TaskError::InvalidOperation("No runner plugin can handle the command".to_string())
         })?;
 
         // Transition to running
@@ -324,9 +309,7 @@ impl TaskService {
         if result.success {
             self.cache
                 .insert(task_id.clone(), result.clone())
-                .map_err(|e| {
-                    TaskError::StorageError(format!("cache persist failed: {e}"))
-                })?;
+                .map_err(|e| TaskError::StorageError(format!("cache persist failed: {e}")))?;
         }
 
         Ok(result)
@@ -358,7 +341,11 @@ impl TaskService {
     ///
     /// Loads each task referenced by the group and runs it sequentially.
     /// Returns the aggregate results in task order.
-    pub async fn run_group(&self, group_id: &GroupId, dry_run: bool) -> Result<Vec<TaskResult>, TaskError> {
+    pub async fn run_group(
+        &self,
+        group_id: &GroupId,
+        dry_run: bool,
+    ) -> Result<Vec<TaskResult>, TaskError> {
         let group = self
             .storage
             .load_group(&group_id.0)
@@ -407,7 +394,7 @@ impl TaskService {
             .await?
             .ok_or_else(|| TaskError::NotFound(workflow_id.0.clone()))?;
 
-        workflow.build_dag().map_err(|e| TaskError::InvalidOperation(e))?;
+        workflow.build_dag().map_err(TaskError::InvalidOperation)?;
 
         let mut completed_step_ids: Vec<String> = Vec::new();
         let mut all_results: Vec<TaskResult> = Vec::new();
@@ -416,11 +403,8 @@ impl TaskService {
         // Wave-based parallel execution: each wave is the set of steps whose
         // dependencies are fully satisfied by the previously-completed waves.
         while completed_step_ids.len() < total_steps {
-            let ready: Vec<_> = workflow
-                .ready_steps(&completed_step_ids)
-                .into_iter()
-                .cloned()
-                .collect();
+            let ready: Vec<_> =
+                workflow.ready_steps(&completed_step_ids).into_iter().cloned().collect();
 
             if ready.is_empty() {
                 // No runnable steps but not all done — cycle or broken DAG.
@@ -654,7 +638,9 @@ mod tests {
 
         let workflow = Workflow::new("test-flow")
             .with_step(WorkflowStep::new("step-a").with_task(task_a.id.clone()))
-            .with_step(WorkflowStep::new("step-b").with_task(task_b.id.clone()).with_dependency("step-a"));
+            .with_step(
+                WorkflowStep::new("step-b").with_task(task_b.id.clone()).with_dependency("step-a"),
+            );
 
         let created = service.create_workflow(workflow).await.unwrap();
         let results = service.execute_workflow(&created.id, false).await.unwrap();
@@ -668,10 +654,8 @@ mod tests {
     async fn test_list_tasks_sorted_by_dependency() {
         let service = setup_service();
 
-        let t1 = service
-            .create_task(CreateTask::new("build").with_command("echo build"))
-            .await
-            .unwrap();
+        let t1 =
+            service.create_task(CreateTask::new("build").with_command("echo build")).await.unwrap();
 
         let t2 = service
             .create_task(
@@ -701,10 +685,8 @@ mod tests {
     async fn test_list_tasks_sorted_with_state_filter() {
         let service = setup_service();
 
-        let t1 = service
-            .create_task(CreateTask::new("build").with_command("echo build"))
-            .await
-            .unwrap();
+        let t1 =
+            service.create_task(CreateTask::new("build").with_command("echo build")).await.unwrap();
 
         let t2 = service
             .create_task(
@@ -717,10 +699,7 @@ mod tests {
         service.cancel_task(t2.id.clone(), Some("filtered".to_string())).await.unwrap();
 
         // Only pending tasks should be returned
-        let sorted = service
-            .list_tasks_sorted(Some(TaskState::Pending), None)
-            .await
-            .unwrap();
+        let sorted = service.list_tasks_sorted(Some(TaskState::Pending), None).await.unwrap();
         assert_eq!(sorted.len(), 1);
         assert_eq!(sorted[0].name, "build");
     }
@@ -731,10 +710,14 @@ mod tests {
     async fn test_execute_workflow_parallel_diamond() {
         let service = setup_service();
 
-        let task_a = service.create_task(CreateTask::new("a").with_command("echo a")).await.unwrap();
-        let task_b = service.create_task(CreateTask::new("b").with_command("echo b")).await.unwrap();
-        let task_c = service.create_task(CreateTask::new("c").with_command("echo c")).await.unwrap();
-        let task_d = service.create_task(CreateTask::new("d").with_command("echo d")).await.unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("a").with_command("echo a")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("b").with_command("echo b")).await.unwrap();
+        let task_c =
+            service.create_task(CreateTask::new("c").with_command("echo c")).await.unwrap();
+        let task_d =
+            service.create_task(CreateTask::new("d").with_command("echo d")).await.unwrap();
 
         // Diamond: a → b, a → c, (b ∧ c) → d
         let workflow = Workflow::new("diamond")
@@ -761,10 +744,14 @@ mod tests {
     async fn test_execute_workflow_parallel_fork() {
         let service = setup_service();
 
-        let task_a = service.create_task(CreateTask::new("root").with_command("echo root")).await.unwrap();
-        let task_b = service.create_task(CreateTask::new("branch-1").with_command("echo b1")).await.unwrap();
-        let task_c = service.create_task(CreateTask::new("branch-2").with_command("echo b2")).await.unwrap();
-        let task_d = service.create_task(CreateTask::new("branch-3").with_command("echo b3")).await.unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("root").with_command("echo root")).await.unwrap();
+        let task_b =
+            service.create_task(CreateTask::new("branch-1").with_command("echo b1")).await.unwrap();
+        let task_c =
+            service.create_task(CreateTask::new("branch-2").with_command("echo b2")).await.unwrap();
+        let task_d =
+            service.create_task(CreateTask::new("branch-3").with_command("echo b3")).await.unwrap();
 
         let workflow = Workflow::new("fork")
             .with_step(WorkflowStep::new("a").with_task(task_a.id.clone()))
@@ -785,19 +772,19 @@ mod tests {
         use crate::domain::workflows::WorkflowStep;
 
         let service = setup_service();
-        let task_a = service.create_task(CreateTask::new("alone").with_command("echo alone")).await.unwrap();
+        let task_a =
+            service.create_task(CreateTask::new("alone").with_command("echo alone")).await.unwrap();
 
         // Manually build a workflow where "a" depends on a ghost step that never completes.
         let mut ghost_step = WorkflowStep::new("ghost");
         ghost_step.task_id = None; // no task — the wave executor skips it for results but still marks it done
-        // We actually want to test a broken dependency reference (step depends on non-existent step).
-        // Simulate by building the workflow with a step that references a dep not in the graph.
+                                   // We actually want to test a broken dependency reference (step depends on non-existent step).
+                                   // Simulate by building the workflow with a step that references a dep not in the graph.
         let mut bad_step = WorkflowStep::new("bad");
         bad_step.task_id = Some(task_a.id.clone());
         bad_step.depends_on = vec!["nonexistent-step".to_string()];
 
-        let workflow = Workflow::new("stall-test")
-            .with_step(bad_step);
+        let workflow = Workflow::new("stall-test").with_step(bad_step);
 
         // build_dag succeeds (the missing dep is simply not added as an edge),
         // but ready_steps will never return "bad" because "nonexistent-step" is never completed.

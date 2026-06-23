@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Workflow definitions and DAG orchestration.
 
-use super::tasks::TaskId;
 use chrono::{DateTime, Utc};
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
+
+use super::tasks::TaskId;
 
 /// Workflow identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -63,7 +64,7 @@ impl WorkflowStep {
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         Self {
-            id: name.clone(),  // Use name as id for easier testing
+            id: name.clone(), // Use name as id for easier testing
             task_id: None,
             name,
             depends_on: Vec::new(),
@@ -206,8 +207,11 @@ impl Workflow {
         visited.insert(step_id.to_string());
 
         // Find the step
-        let step = self.steps.iter().find(|s| s.id == step_id)
-            .ok_or_else(|| format!("Step not found: {}", step_id))?;
+        let step = self
+            .steps
+            .iter()
+            .find(|s| s.id == step_id)
+            .ok_or_else(|| format!("Step not found: {step_id}"))?;
 
         // Visit dependencies first
         for dep in &step.depends_on {
@@ -253,8 +257,8 @@ mod tests {
     #[test]
     fn test_execution_order() {
         let mut workflow = Workflow::new("test")
-            .with_step(WorkflowStep::new("step-0"))  // Add step-0 first
-            .with_step(WorkflowStep::new("step-1").with_dependency("step-0"));  // Then step-1 depends on step-0
+            .with_step(WorkflowStep::new("step-0")) // Add step-0 first
+            .with_step(WorkflowStep::new("step-1").with_dependency("step-0")); // Then step-1 depends on step-0
 
         workflow.build_dag().unwrap();
         let order = workflow.execution_order().unwrap();
