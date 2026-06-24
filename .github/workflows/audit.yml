@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@v4 # v4.1.1
 
       - name: Setup Node
-        uses: actions/setup-node@1d0ff469b7ec7b138cb3bdcbe74e5672f63d3013 # v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
 
