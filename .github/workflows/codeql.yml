@@ -38,3 +38,10 @@ jobs:
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
         with:
           category: "/language:rust"
+          upload: 'never'
+        # NOTE: This repo has GitHub's "Default CodeQL setup" enabled in repo
+        # settings, so the custom (advanced) workflow must NOT upload SARIF —
+        # doing so errors with: "CodeQL analyses from advanced configurations
+        # cannot be processed when the default setup is enabled". We still run
+        # the build/analyze locally for visibility; the default setup is the
+        # authoritative source of Code Scanning alerts.

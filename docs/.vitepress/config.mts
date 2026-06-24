@@ -7,6 +7,20 @@ export default defineConfig({
   outDir: '.vitepress/dist',
   cleanUrls: true,
   ignoreDeadLinks: true,
+  // Exclude non-public propagated files (boundary/intent/history/worklogs/etc.
+  // are consumed by other tools and contain HTML-like tags in YAML frontmatter
+  // that VitePress's Vue template compiler cannot parse). Only the public docs
+  // surface (root + getting-started) is shipped.
+  srcExclude: [
+    'boundary/**',
+    'intent/**',
+    'history/**',
+    'worklogs/**',
+    'traceability/**',
+    'operations/**',
+    'stories/**',
+    'journeys/**',
+  ],
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
