@@ -19,20 +19,15 @@ use serde::{Deserialize, Serialize};
 /// Used for documentation, validation, and UI rendering. Does **not**
 /// enforce type coercion at interpolation time — all values are stored
 /// as strings internally.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VarType {
+    #[default]
     String,
     Number,
     Bool,
     Path,
     Choice(Vec<String>),
-}
-
-impl Default for VarType {
-    fn default() -> Self {
-        Self::String
-    }
 }
 
 impl VarType {
