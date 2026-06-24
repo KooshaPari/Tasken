@@ -23,3 +23,9 @@ debug
 target
 *.pdb
 **/mutants.out*/
+
+# VitePress / Node
+node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+package-lock.json
