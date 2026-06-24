@@ -437,7 +437,16 @@ mod tests {
     async fn test_stream_runner_async_handles_binary() {
         let runner: Box<dyn TaskRunner> = Box::new(StreamRunner::new());
         // Emit a single null byte on stdout; ensure it's preserved.
-        let task = make_task_with_command("printf '\\x00'");
+        //
+        // The shell single-quoted literal `'\000'` is passed to
+        // `printf` as the four literal characters `\000`. `printf`
+        // then interprets `\000` as a 3-digit octal escape (octal
+        // 000 = NUL byte), emitting exactly one byte on stdout.
+        // Using `\x00` instead would either be left as four literal
+        // characters by POSIX shells whose `printf` doesn't
+        // recognize `\xHH`, or expanded only by shells that do —
+        // neither matches the test's intent of "exactly one byte".
+        let task = make_task_with_command("printf '\\000'");
         let result = runner.execute_async(task).await.unwrap();
         let stdout_bytes = result.output.unwrap()["stdout_bytes"].as_u64().unwrap();
         assert_eq!(stdout_bytes, 1);
