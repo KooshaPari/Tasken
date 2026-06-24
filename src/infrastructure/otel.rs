@@ -337,7 +337,7 @@ impl TracingOtelSpan {
             "Failed" => "state.failed",
             "Cancelled" => "state.cancelled",
             "Skipped" => "state.skipped",
-            other => "state.unknown", // unknown states still emit, just with a fallback name
+            _other => "state.unknown", // unknown states still emit, just with a fallback name
         });
         record_field(&self.span, "task.state", &state);
     }
@@ -455,6 +455,7 @@ mod tests {
     use tracing::span::{Attributes, Id, Record};
     use tracing::{Event, Subscriber};
     use tracing_subscriber::layer::{Context, Layer};
+    use tracing_subscriber::prelude::*;
     use tracing_subscriber::Registry;
 
     use super::*;
