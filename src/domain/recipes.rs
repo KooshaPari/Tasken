@@ -379,7 +379,7 @@ pub fn interpolate_strict(template: &str, vars: &Vars) -> Result<String, Interpo
 /// use taskkit::domain::recipes::evaluate_condition;
 ///
 /// assert!(evaluate_condition(""));
-/// assert!(evaluate_condition("os == \"macos\"") || evaluate_condition("os == \"linux\""));
+/// assert!(evaluate_condition(&format!("os == \"{}\"", std::env::consts::OS)));
 /// assert!(!evaluate_condition("os == \"nonexistent_os\""));
 /// ```
 pub fn evaluate_condition(condition: &str) -> bool {
@@ -965,7 +965,10 @@ mod tests {
 
     #[test]
     fn test_condition_or_true() {
-        assert!(evaluate_condition("os == \"linux\" or os == \"macos\""));
+        // At least one operand must match the runtime OS so the test is
+        // OS-agnostic (e.g. also passes on Windows).
+        let current_os = std::env::consts::OS;
+        assert!(evaluate_condition(&format!("os == \"linux\" or os == \"{current_os}\"")));
     }
 
     #[test]
