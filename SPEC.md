@@ -8,8 +8,9 @@
 
 Task Runner for the Phenotype ecosystem.
 
-**Language**: Go
-**Features**: Background job processing
+**Language**: Rust
+**Crate name**: `taskkit`
+**Features**: Background job processing, scheduled workflows, parallel wave-based DAG execution, OpenTelemetry-compatible span instrumentation (gated by the `otel` feature flag)
 
 ## Quick Start
 
