@@ -3,6 +3,7 @@
 
 pub mod cache;
 pub mod error;
+pub mod observability;
 pub mod persistent_cache;
 
 /// OpenTelemetry-compatible span instrumentation. Compiled only when the

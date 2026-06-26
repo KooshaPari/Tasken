@@ -15,6 +15,7 @@ use crate::domain::groups::Group;
 use crate::domain::rate_limiter::{parse_rate_limit, TokenBucket};
 use crate::domain::tasks::{Priority, TaskId, TaskState};
 use crate::domain::workflows::{Workflow, WorkflowStep};
+use crate::infrastructure::observability;
 
 /// CLI arguments.
 #[derive(Parser, Debug)]
@@ -178,6 +179,10 @@ pub enum Command {
         #[arg(long, default_value = "dot")]
         format: String,
     },
+    /// Run a local health check.
+    Health,
+    /// Alias for `health` for readiness probes.
+    Ready,
 }
 
 /// Workflow subcommands.
@@ -286,6 +291,7 @@ impl CliAdapter {
         let _ = dotenvy::dotenv();
 
         let cli = Cli::parse();
+        observability::metrics().record_command_started();
 
         if cli.dry_run && !cli.silent {
             eprintln!("[dry-run] would execute command");
@@ -317,7 +323,9 @@ impl CliAdapter {
             }
         }
 
-        Self::handle_command(cli, service).await.context("CLI command execution failed")?;
+        let outcome = Self::handle_command(cli, service).await.context("CLI command execution failed");
+        observability::metrics().record_command_finished(outcome.is_ok());
+        outcome?;
         Ok(())
     }
 
@@ -562,6 +570,22 @@ impl CliAdapter {
                 };
                 if !cli.silent {
                     print!("{output}");
+                }
+            }
+            Some(Command::Health) | Some(Command::Ready) => {
+                observability::metrics().record_health_check();
+                let storage_ok = service.list_tasks(None, None, Some(1)).await.is_ok();
+                let ready = storage_ok;
+                if !cli.silent {
+                    let payload = serde_json::json!({
+                        "status": if ready { "ok" } else { "degraded" },
+                        "ready": ready,
+                        "storage": storage_ok,
+                    });
+                    println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+                }
+                if !ready {
+                    return Err(anyhow::anyhow!("health check failed"));
                 }
             }
             Some(Command::Group { ref command }) => {
