@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Process-level observability helpers.
 
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use tracing_subscriber::EnvFilter;
@@ -96,7 +96,8 @@ pub fn install() -> ObservabilityGuard {
         .and_then(|spec| EnvFilter::try_new(spec).ok())
         .unwrap_or_else(|| EnvFilter::new("taskkit=info"));
 
-    let json_logs = std::env::var("TASKEN_LOG_FORMAT").map(|v| v.eq_ignore_ascii_case("json")).unwrap_or(true);
+    let json_logs =
+        std::env::var("TASKEN_LOG_FORMAT").map(|v| v.eq_ignore_ascii_case("json")).unwrap_or(true);
 
     if json_logs {
         let _ = tracing_subscriber::fmt()

@@ -323,7 +323,8 @@ impl CliAdapter {
             }
         }
 
-        let outcome = Self::handle_command(cli, service).await.context("CLI command execution failed");
+        let outcome =
+            Self::handle_command(cli, service).await.context("CLI command execution failed");
         observability::metrics().record_command_finished(outcome.is_ok());
         outcome?;
         Ok(())

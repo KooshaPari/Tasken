@@ -54,7 +54,6 @@ toml = "0.8"
 serde_yaml = "0.9"
 
 # Observability (optional, gated by the `otel` feature flag)
-tracing = { version = "0.1", optional = true }
 opentelemetry = { version = "0.24", optional = true }
 
 [dev-dependencies]
@@ -74,4 +73,4 @@ default = []
 # is wired into TaskService::run_task and TaskService::execute_workflow,
 # but the actual exporter (stdout, OTLP, etc.) is left to the embedding
 # application — see `infrastructure::otel::init_tracer` for a stub.
-otel = ["dep:tracing", "dep:opentelemetry"]
+otel = ["dep:opentelemetry"]
