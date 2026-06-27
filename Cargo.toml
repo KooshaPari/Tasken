@@ -50,7 +50,7 @@ dirs = "6"
 envy = "0.4"
 
 # Parsing
-toml = "0.8"
+toml = "1.1"
 serde_yaml = "0.9"
 
 # Observability (optional, gated by the `otel` feature flag)
