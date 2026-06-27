@@ -54,7 +54,7 @@ toml = "0.8"
 serde_yaml = "0.9"
 
 # Observability (optional, gated by the `otel` feature flag)
-opentelemetry = { version = "0.24", optional = true }
+opentelemetry = { version = "0.32", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
