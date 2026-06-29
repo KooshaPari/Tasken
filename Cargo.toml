@@ -32,8 +32,6 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 dotenvy = "0.15"
 libc = "0.2"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 
 # File system watching
 notify = { version = "8", features = ["macos_kqueue"] }
@@ -50,11 +48,17 @@ dirs = "6"
 envy = "0.4"
 
 # Parsing
-toml = "1.1"
+toml = "0.8"
 serde_yaml = "0.9"
 
 # Observability (optional, gated by the `otel` feature flag)
 opentelemetry = { version = "0.32", optional = true }
+# L62 (error rate) observability adoption (v14 cycle-3 T7).
+# Optional, gated by the same `otel` feature as the other observability deps
+# so consumers that don't want OTel don't pull it in. When enabled, the
+# `import::ImportError::CircularImport` site records an `errors.count` metric
+# labelled `tasken.import.circular` so fleet-wide error rate dashboards see it.
+pheno-otel = { path = "../pheno-otel", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -73,4 +77,4 @@ default = []
 # is wired into TaskService::run_task and TaskService::execute_workflow,
 # but the actual exporter (stdout, OTLP, etc.) is left to the embedding
 # application — see `infrastructure::otel::init_tracer` for a stub.
-otel = ["dep:opentelemetry"]
+otel = ["dep:tracing", "dep:opentelemetry", "dep:pheno-otel"]
