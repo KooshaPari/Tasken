@@ -373,7 +373,9 @@ impl CliAdapter {
 
                 let task = cmd.execute(&service).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                    let json = serde_json::to_string_pretty(&task)
+                        .context("Failed to serialize created task")?;
+                    println!("{json}");
                 }
             }
             Some(Command::List { state, tag, limit }) => {
@@ -387,7 +389,9 @@ impl CliAdapter {
                 };
                 let tasks = query.execute(&service).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
+                    let json = serde_json::to_string_pretty(&tasks)
+                        .context("Failed to serialize task list")?;
+                    println!("{json}");
                 }
             }
             Some(Command::Get { id }) => {
@@ -395,7 +399,9 @@ impl CliAdapter {
                 match task {
                     Some(t) => {
                         if !cli.silent {
-                            println!("{}", serde_json::to_string_pretty(&t).unwrap());
+                            let json = serde_json::to_string_pretty(&t)
+                                .context("Failed to serialize task")?;
+                            println!("{json}");
                         }
                     }
                     None => return Err(TaskError::NotFound(id).into()),
@@ -426,7 +432,9 @@ impl CliAdapter {
                     // Standard run using the service (with cache)
                     let result = service.run_task(&task_id, cli.dry_run).await?;
                     if !cli.silent {
-                        println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                        let json = serde_json::to_string_pretty(&result)
+                            .context("Failed to serialize task result")?;
+                        println!("{json}");
                     }
                     if !result.success {
                         std::process::exit(1);
@@ -504,7 +512,9 @@ impl CliAdapter {
                 }
                 let task = cmd.execute(&service).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                    let json = serde_json::to_string_pretty(&task)
+                        .context("Failed to serialize created task")?;
+                    println!("{json}");
                 }
             }
             Some(Command::Workflow { ref command }) => {
@@ -587,13 +597,17 @@ impl CliAdapter {
                 let workflow = Workflow::new(name);
                 let created = service.create_workflow(workflow).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                    let json = serde_json::to_string_pretty(&created)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
             WorkflowCommand::List => {
                 let workflows = service.list_workflows().await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&workflows).unwrap());
+                    let json = serde_json::to_string_pretty(&workflows)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
             WorkflowCommand::Get { id } => {
@@ -602,7 +616,9 @@ impl CliAdapter {
                 match workflow {
                     Some(w) => {
                         if !cli.silent {
-                            println!("{}", serde_json::to_string_pretty(&w).unwrap());
+                            let json = serde_json::to_string_pretty(&w)
+                                .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                            println!("{json}");
                         }
                     }
                     None => return Err(TaskError::NotFound(id)),
@@ -628,7 +644,9 @@ impl CliAdapter {
                 workflow = workflow.with_step(step);
                 let updated = service.create_workflow(workflow).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&updated).unwrap());
+                    let json = serde_json::to_string_pretty(&updated)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
             WorkflowCommand::Run { id } => {
@@ -636,7 +654,9 @@ impl CliAdapter {
                 let w_id = WorkflowId::from_string(id);
                 let results = service.execute_workflow(&w_id, cli.dry_run).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                    let json = serde_json::to_string_pretty(&results)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
         }
@@ -662,13 +682,17 @@ impl CliAdapter {
                 }
                 let created = service.create_group(group).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&created).unwrap());
+                    let json = serde_json::to_string_pretty(&created)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
             GroupCommand::List => {
                 let groups = service.list_groups().await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&groups).unwrap());
+                    let json = serde_json::to_string_pretty(&groups)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
             GroupCommand::Show { name } => {
@@ -679,7 +703,9 @@ impl CliAdapter {
                     .find(|g| g.name == name)
                     .ok_or_else(|| TaskError::NotFound(name.clone()))?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&group).unwrap());
+                    let json = serde_json::to_string_pretty(&group)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
             GroupCommand::Run { name } => {
@@ -697,7 +723,9 @@ impl CliAdapter {
                     .ok_or_else(|| TaskError::NotFound(name.clone()))?;
                 let results = service.run_group(&group.id, cli.dry_run).await?;
                 if !cli.silent {
-                    println!("{}", serde_json::to_string_pretty(&results).unwrap());
+                    let json = serde_json::to_string_pretty(&results)
+                        .map_err(|e| TaskError::SerializationError(e.to_string()))?;
+                    println!("{json}");
                 }
             }
         }

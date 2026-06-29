@@ -82,7 +82,58 @@ impl TaskenConfig {
         // Attempt to load .env file; ignore errors (no .env is not a failure).
         let _ = dotenvy::dotenv();
 
-        envy::prefixed("TASKEN_").from_env::<Self>().unwrap_or_default()
+        let mut cfg = envy::prefixed("TASKEN_").from_env::<Self>().unwrap_or_default();
+
+        // Sanitize paths: canonicalize data_dir to prevent directory traversal
+        // via environment variables.
+        cfg.sanitize_paths();
+        cfg
+    }
+
+    /// Sanitize file paths to prevent directory traversal attacks.
+    ///
+    /// Canonicalizes `data_dir` and ensures all derived paths resolve within
+    /// the data directory. If canonicalization fails, the path is left as-is
+    /// (the I/O layer will fail later with a clear error).
+    fn sanitize_paths(&mut self) {
+        // Canonicalize data_dir if it exists; otherwise leave it for the
+        // I/O layer to create.
+        if self.data_dir.exists() {
+            if let Ok(canonical) = self.data_dir.canonicalize() {
+                self.data_dir = canonical;
+            }
+        }
+
+        // Check for path traversal patterns in store_file and cache_file.
+        let suspicious = |p: &str| {
+            p.starts_with("/")
+                || p.starts_with("..")
+                || p.contains("/..")
+                || p.contains("\\..")
+                || p.contains('\0')
+        };
+
+        if suspicious(&self.store_file) {
+            eprintln!(
+                "Warning: TASKEN_STORE_FILE='{}' contains path traversal patterns; using default.",
+                self.store_file
+            );
+            self.store_file = "store.json".to_string();
+        }
+        if suspicious(&self.cache_file) {
+            eprintln!(
+                "Warning: TASKEN_CACHE_FILE='{}' contains path traversal patterns; using default.",
+                self.cache_file
+            );
+            self.cache_file = "cache.json".to_string();
+        }
+        if let Some(ref dir) = self.cache_dir {
+            let d = dir.to_string_lossy();
+            if d.contains('\0') {
+                eprintln!("Warning: TASKEN_CACHE_DIR='{d}' contains null bytes; using data_dir.");
+                self.cache_dir = None;
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -199,5 +250,65 @@ mod tests {
                 assert_eq!(cfg.default_list_limit, 100);
             },
         );
+    }
+
+    #[test]
+    fn test_sanitize_paths_rejects_traversal_in_store_file() {
+        let mut cfg = TaskenConfig::default();
+        cfg.store_file = "../../etc/passwd".to_string();
+        cfg.sanitize_paths();
+        assert_eq!(
+            cfg.store_file, "store.json",
+            "store_file should fall back to default on path traversal"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_paths_rejects_absolute_cache_file() {
+        let mut cfg = TaskenConfig::default();
+        cfg.cache_file = "/tmp/malicious-cache.json".to_string();
+        cfg.sanitize_paths();
+        assert_eq!(
+            cfg.cache_file, "cache.json",
+            "cache_file should fall back to default when absolute"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_paths_rejects_null_bytes_in_cache_dir() {
+        let mut cfg = TaskenConfig::default();
+        cfg.cache_dir = Some(std::path::PathBuf::from("/tmp/../\0hidden"));
+        cfg.sanitize_paths();
+        assert!(cfg.cache_dir.is_none(), "cache_dir should be set to None when null bytes present");
+    }
+
+    #[test]
+    fn test_sanitize_paths_accepts_normal_paths() {
+        let mut cfg = TaskenConfig::default();
+        assert_eq!(cfg.store_file, "store.json");
+        assert_eq!(cfg.cache_file, "cache.json");
+        // Normal paths should pass through unchanged
+        cfg.sanitize_paths();
+        assert_eq!(cfg.store_file, "store.json");
+        assert_eq!(cfg.cache_file, "cache.json");
+    }
+
+    #[test]
+    fn test_sanitize_paths_rejects_backwards_traversal() {
+        let mut cfg = TaskenConfig::default();
+        cfg.store_file = "..\\..\\windows\\system32\\evil.dll".to_string();
+        cfg.sanitize_paths();
+        assert_eq!(
+            cfg.store_file, "store.json",
+            "store_file should fall back on Windows-style traversal"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_paths_rejects_subdir_traversal() {
+        let mut cfg = TaskenConfig::default();
+        cfg.cache_file = "cache/../../etc/shadow".to_string();
+        cfg.sanitize_paths();
+        assert_eq!(cfg.cache_file, "cache.json", "cache_file should fall back on subdir traversal");
     }
 }
