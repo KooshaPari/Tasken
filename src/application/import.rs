@@ -18,9 +18,10 @@
 //! The `ImportResolver` resolves these directives recursively, merges all
 //! imported recipes' tasks and workflows, and detects circular imports.
 
+use std::path::{Path, PathBuf};
+
 use crate::domain::tasks::Task;
 use crate::domain::workflows::Workflow;
-use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -73,11 +74,7 @@ pub enum ImportError {
 
     /// An @import directive could not be interpreted (e.g. missing quotes).
     #[error("Invalid @import directive at {path}:{line}: {message}")]
-    InvalidImport {
-        path: PathBuf,
-        line: usize,
-        message: String,
-    },
+    InvalidImport { path: PathBuf, line: usize, message: String },
 
     /// The recipe file contained neither tasks nor workflows after imports.
     #[error("No tasks or workflows found in {path}")]
@@ -129,13 +126,8 @@ impl ImportResolver {
     pub fn resolve_file(&self, path: impl AsRef<Path>) -> Result<ImportResult, ImportError> {
         let path = path.as_ref();
         let canonical = std::fs::canonicalize(path).map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => ImportError::FileNotFound {
-                path: path.to_path_buf(),
-            },
-            _ => ImportError::IoError {
-                path: path.to_path_buf(),
-                source: e,
-            },
+            std::io::ErrorKind::NotFound => ImportError::FileNotFound { path: path.to_path_buf() },
+            _ => ImportError::IoError { path: path.to_path_buf(), source: e },
         })?;
 
         let mut visited: Vec<PathBuf> = Vec::new();
@@ -152,18 +144,18 @@ impl ImportResolver {
         // --- Circular import check ---
         if visited.iter().any(|p| p == path) {
             #[cfg(feature = "otel")]
-            pheno_otel::metrics::record_error("tasken.import", "circular_import");
-            return Err(ImportError::CircularImport {
-                path: path.to_path_buf(),
-            });
+            tracing::debug!(
+                target = "tasken.import",
+                path = %path.display(),
+                "circular import detected during recipe resolution"
+            );
+            return Err(ImportError::CircularImport { path: path.to_path_buf() });
         }
         visited.push(path.to_path_buf());
 
         // --- Read the raw file content ---
-        let content = std::fs::read_to_string(path).map_err(|e| ImportError::IoError {
-            path: path.to_path_buf(),
-            source: e,
-        })?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| ImportError::IoError { path: path.to_path_buf(), source: e })?;
 
         // --- Parse @import directives ---
         let parent_dir = path.parent().unwrap_or(Path::new("."));
@@ -173,33 +165,21 @@ impl ImportResolver {
         let json_content = Self::strip_import_lines(&content);
 
         // --- Parse the JSON body ---
-        let recipe: RecipeFile =
-            serde_json::from_str(&json_content).map_err(|e| ImportError::ParseError {
-                path: path.to_path_buf(),
-                source: e,
-            })?;
+        let recipe: RecipeFile = serde_json::from_str(&json_content)
+            .map_err(|e| ImportError::ParseError { path: path.to_path_buf(), source: e })?;
 
         // --- Recursively resolve each import and merge ---
-        let mut result = ImportResult {
-            tasks: recipe.tasks,
-            workflows: recipe.workflows,
-        };
+        let mut result = ImportResult { tasks: recipe.tasks, workflows: recipe.workflows };
 
         for directive in &directives {
             // Canonicalise the imported path now that we are about to read it.
             // This converts relative paths to absolute and validates existence.
-            let canonical = directive
-                .resolved_path
-                .canonicalize()
-                .map_err(|e| match e.kind() {
-                    std::io::ErrorKind::NotFound => ImportError::FileNotFound {
-                        path: directive.resolved_path.clone(),
-                    },
-                    _ => ImportError::IoError {
-                        path: directive.resolved_path.clone(),
-                        source: e,
-                    },
-                })?;
+            let canonical = directive.resolved_path.canonicalize().map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    ImportError::FileNotFound { path: directive.resolved_path.clone() }
+                }
+                _ => ImportError::IoError { path: directive.resolved_path.clone(), source: e },
+            })?;
             let imported = self.resolve_inner(&canonical, visited)?;
             result.tasks.extend(imported.tasks);
             result.workflows.extend(imported.workflows);
@@ -261,10 +241,8 @@ impl ImportResolver {
             // exist on disk. The caller handles I/O and canonicalisation.
             let resolved = parent_dir.join(path_str);
 
-            directives.push(ImportDirective {
-                raw_path: path_str.to_string(),
-                resolved_path: resolved,
-            });
+            directives
+                .push(ImportDirective { raw_path: path_str.to_string(), resolved_path: resolved });
         }
 
         Ok(directives)
@@ -287,9 +265,10 @@ impl ImportResolver {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
     use std::io::Write;
+
+    use super::*;
 
     // -- Helper: create a temporary recipe file and return its path -----------
 
@@ -597,9 +576,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let recipe_path = create_recipe(dir.path(), "bad_import.json", content);
 
-        let err = ImportResolver::new()
-            .resolve_file(&recipe_path)
-            .expect_err("should error");
+        let err = ImportResolver::new().resolve_file(&recipe_path).expect_err("should error");
 
         match err {
             ImportError::InvalidImport { line: 1, .. } => {} // expected
