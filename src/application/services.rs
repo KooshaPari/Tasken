@@ -216,9 +216,23 @@ impl TaskService {
     }
 
     /// Get task event history.
-    pub async fn get_task_history(&self, _task_id: &TaskId) -> Result<Vec<TaskEvent>, TaskError> {
-        // In a real implementation, load events from storage
-        Ok(Vec::new())
+    ///
+    /// Returns the full ordered sequence of [`TaskEvent`]s appended for
+    /// `task_id`.  An empty vec is returned (not an error) when no events
+    /// have been recorded yet.
+    pub async fn get_task_history(&self, task_id: &TaskId) -> Result<Vec<TaskEvent>, TaskError> {
+        let events = self.storage.load_events(&task_id.0).await?;
+        Ok(events)
+    }
+
+    /// Append an event to a task's history.
+    ///
+    /// Callers within the service layer use this to record state transitions
+    /// and execution lifecycle events so that [`get_task_history`] can replay
+    /// them.
+    pub async fn record_event(&self, event: TaskEvent) -> Result<(), TaskError> {
+        self.storage.append_event(event).await?;
+        Ok(())
     }
 
     /// Execute a task by queuing it.

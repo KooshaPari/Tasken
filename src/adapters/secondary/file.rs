@@ -8,6 +8,7 @@ use async_trait::async_trait;
 
 use crate::domain::{
     errors::PortError,
+    events::TaskEvent,
     ports::{QueuePort, StoragePort},
     Group, Schedule, Task, Workflow,
 };
@@ -20,6 +21,9 @@ struct DataStore {
     schedules: HashMap<String, Schedule>,
     groups: HashMap<String, Group>,
     queue: Vec<Task>,
+    /// Event log per task ID; stored as JSON values (TaskEvent::Serialize output).
+    #[serde(default)]
+    events: HashMap<String, Vec<serde_json::Value>>,
 }
 
 /// File-based storage implementation using JSON.
@@ -133,6 +137,22 @@ impl StoragePort for FileStorage {
         let mut store = self.load_store()?;
         store.groups.remove(id);
         self.save_store(&store)
+    }
+
+    async fn append_event(&self, event: TaskEvent) -> Result<(), PortError> {
+        let task_id = event.task_id().0.clone();
+        let value = serde_json::to_value(&event)
+            .map_err(|e| PortError::Serialization(format!("event serialize: {e}")))?;
+        let mut store = self.load_store()?;
+        store.events.entry(task_id).or_default().push(value);
+        self.save_store(&store)
+    }
+
+    async fn load_events(&self, _task_id: &str) -> Result<Vec<TaskEvent>, PortError> {
+        // File-backed event replay requires a Deserialize impl on TaskEvent.
+        // For now return empty — in-memory replay works; file persistence of
+        // events is a tracked follow-up (see FORK.md roadmap).
+        Ok(Vec::new())
     }
 }
 

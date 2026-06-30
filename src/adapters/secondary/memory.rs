@@ -8,6 +8,7 @@ use async_trait::async_trait;
 
 use crate::domain::{
     errors::PortError,
+    events::TaskEvent,
     ports::{QueuePort, StoragePort},
     Group, Schedule, Task, Workflow,
 };
@@ -19,6 +20,8 @@ pub struct MemoryStorage {
     schedules: Arc<RwLock<HashMap<String, Schedule>>>,
     groups: Arc<RwLock<HashMap<String, Group>>>,
     queue: Arc<RwLock<Vec<Task>>>,
+    /// Append-only event log keyed by task ID.
+    events: Arc<RwLock<HashMap<String, Vec<TaskEvent>>>>,
 }
 
 impl MemoryStorage {
@@ -30,6 +33,7 @@ impl MemoryStorage {
             schedules: Arc::new(RwLock::new(HashMap::new())),
             groups: Arc::new(RwLock::new(HashMap::new())),
             queue: Arc::new(RwLock::new(Vec::new())),
+            events: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -118,6 +122,18 @@ impl StoragePort for MemoryStorage {
         let mut groups = self.groups.write().map_err(|e| PortError::Storage(e.to_string()))?;
         groups.remove(id);
         Ok(())
+    }
+
+    async fn append_event(&self, event: TaskEvent) -> Result<(), PortError> {
+        let task_id = event.task_id().0.clone();
+        let mut log = self.events.write().map_err(|e| PortError::Storage(e.to_string()))?;
+        log.entry(task_id).or_default().push(event);
+        Ok(())
+    }
+
+    async fn load_events(&self, task_id: &str) -> Result<Vec<TaskEvent>, PortError> {
+        let log = self.events.read().map_err(|e| PortError::Storage(e.to_string()))?;
+        Ok(log.get(task_id).cloned().unwrap_or_default())
     }
 }
 
