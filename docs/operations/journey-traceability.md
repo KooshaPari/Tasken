@@ -25,5 +25,14 @@ Manifest schema: `manifest.schema.json` (from phenotype-journeys)
 
 ## CI Gate
 
-Journey gate workflow: `.github/workflows/journey-gate.yml`  
-Gate status: **Stub — populate manifests to pass CI**
+Journey gate workflow: `.github/workflows/journey-gate.yml`
+
+Gate status: **Pending** — journey manifests under `docs/journeys/manifests/`
+have not yet been authored.  The gate workflow is disabled until at least one
+manifest is present.  Tracked in FORK.md § Known gaps.
+
+## Backlog
+
+- [ ] Author `quick-start` manifest covering the `tasken run <task>` happy path
+- [ ] Author `core-integration` manifest for library embedding use-case
+- [ ] Enable journey-gate CI job once manifests exist

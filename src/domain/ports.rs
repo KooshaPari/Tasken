@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 
 use super::errors::PortError;
+use super::events::TaskEvent;
 use super::{Group, Schedule, Task, TaskResult, Workflow};
 
 /// Port for task storage operations.
@@ -50,6 +51,12 @@ pub trait StoragePort: Send + Sync {
 
     /// Delete a group.
     async fn delete_group(&self, id: &str) -> Result<(), PortError>;
+
+    /// Append an event to a task's event log.
+    async fn append_event(&self, event: TaskEvent) -> Result<(), PortError>;
+
+    /// Load all events for a task, in insertion order.
+    async fn load_events(&self, task_id: &str) -> Result<Vec<TaskEvent>, PortError>;
 }
 
 /// Port for task queue operations.

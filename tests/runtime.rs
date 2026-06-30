@@ -237,12 +237,41 @@ async fn test_service_with_cache_uses_provided_cache() {
 }
 
 #[tokio::test]
-async fn test_service_get_task_history_returns_empty_vec() {
-    // get_task_history is currently a stub returning Vec::new().
+async fn test_service_get_task_history_empty_for_unknown_task() {
+    // No events recorded → history should be empty (not an error).
     let service = setup_service();
-    let id = TaskId::from_string("any");
+    let id = TaskId::from_string("unknown-task-id");
     let history = service.get_task_history(&id).await.unwrap();
-    assert!(history.is_empty());
+    assert!(history.is_empty(), "expected no events for an unknown task");
+}
+
+#[tokio::test]
+async fn test_service_get_task_history_returns_recorded_events() {
+    use taskkit::domain::events::TaskEvent;
+    use taskkit::domain::tasks::TaskState;
+
+    let service = setup_service();
+    let cmd = CreateTask::new("history-task").with_command("echo hi");
+    let task = service.create_task(cmd).await.unwrap();
+
+    // Record a state-change event via the new record_event API.
+    let event = TaskEvent::StateChanged {
+        task_id: task.id.clone(),
+        from: TaskState::Pending,
+        to: TaskState::Running,
+        timestamp: chrono::Utc::now(),
+    };
+    service.record_event(event).await.unwrap();
+
+    let history = service.get_task_history(&task.id).await.unwrap();
+    assert_eq!(history.len(), 1, "expected exactly one recorded event");
+    match &history[0] {
+        TaskEvent::StateChanged { from, to, .. } => {
+            assert_eq!(*from, TaskState::Pending);
+            assert_eq!(*to, TaskState::Running);
+        }
+        other => panic!("unexpected event kind: {other:?}"),
+    }
 }
 
 #[tokio::test]

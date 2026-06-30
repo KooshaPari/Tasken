@@ -51,22 +51,20 @@ envy = "0.4"
 toml = "0.8"
 serde_yaml = "0.9"
 
-# Observability (optional, gated by the `otel` feature flag)
+# Observability
+# tracing macros are used unconditionally in main.rs and infrastructure.
+tracing = "0.1"
+# tracing-subscriber formats logs; .json() requires the "json" feature.
+tracing-subscriber = { version = "0.3", features = ["env-filter", "registry", "json"] }
+# opentelemetry is opt-in via the `otel` feature.
 opentelemetry = { version = "0.32", optional = true }
-# L62 (error rate) observability adoption (v14 cycle-3 T7).
-# Optional, gated by the same `otel` feature as the other observability deps
-# so consumers that don't want OTel don't pull it in. When enabled, the
-# `import::ImportError::CircularImport` site records an `errors.count` metric
-# labelled `tasken.import.circular` so fleet-wide error rate dashboards see it.
-pheno-otel = { path = "../pheno-otel", optional = true }
+# pheno-otel is an optional Phenotype-internal metrics shim (L62 error rate).
+# The crate is not yet published; enable once ../pheno-otel ships a Cargo.toml.
+# pheno-otel = { path = "../pheno-otel", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
 temp-env = "0.3"
-# Used by infrastructure::otel tests to install a tracing subscriber and
-# capture span field recordings + events. Always present (test-only); the
-# production `otel` feature does NOT require this.
-tracing-subscriber = { version = "0.3", features = ["registry"] }
 
 [features]
 default = []
@@ -77,4 +75,4 @@ default = []
 # is wired into TaskService::run_task and TaskService::execute_workflow,
 # but the actual exporter (stdout, OTLP, etc.) is left to the embedding
 # application — see `infrastructure::otel::init_tracer` for a stub.
-otel = ["dep:tracing", "dep:opentelemetry", "dep:pheno-otel"]
+otel = ["dep:opentelemetry"]
