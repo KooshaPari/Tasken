@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
+use crate::adapters::primary::ColorChoice;
 use crate::application::visualize::{generate_dot, generate_mermaid, GraphFormat};
 use crate::application::{
     compose_command, watcher::FileWatcher, CreateTask, ForwardedArgs, ListTasks, TaskService,
@@ -35,6 +36,12 @@ pub struct Cli {
     /// When set, task execution will be throttled to this rate.
     #[arg(long, global = true)]
     pub rate_limit: Option<String>,
+    /// Colour output mode: auto, always, never.
+    ///
+    /// When not set, respects the `NO_COLOR`, `CLICOLOR_FORCE`, and
+    /// `CLICOLOR` environment variables.
+    #[arg(long, global = true, default_value = "auto", value_parser = clap::value_parser!(ColorChoice))]
+    pub color: ColorChoice,
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -286,6 +293,11 @@ impl CliAdapter {
         let _ = dotenvy::dotenv();
 
         let cli = Cli::parse();
+
+        // Resolve effective color choice: explicit CLI flag takes priority,
+        // otherwise fall back to env vars (NO_COLOR, CLICOLOR_FORCE, CLICOLOR).
+        let _color =
+            if cli.color == ColorChoice::Auto { ColorChoice::from_env() } else { cli.color };
 
         if cli.dry_run && !cli.silent {
             eprintln!("[dry-run] would execute command");
@@ -849,5 +861,31 @@ mod tests {
             }
             other => panic!("expected Run, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_cli_default_color_is_auto() {
+        let cli = Cli::try_parse_from(["taskkit", "default"]).expect("parse should succeed");
+        assert_eq!(cli.color, ColorChoice::Auto);
+    }
+
+    #[test]
+    fn test_cli_color_flag_always() {
+        let cli =
+            Cli::try_parse_from(["taskkit", "--color", "always"]).expect("parse should succeed");
+        assert_eq!(cli.color, ColorChoice::Always);
+    }
+
+    #[test]
+    fn test_cli_color_flag_never() {
+        let cli =
+            Cli::try_parse_from(["taskkit", "--color", "never"]).expect("parse should succeed");
+        assert_eq!(cli.color, ColorChoice::Never);
+    }
+
+    #[test]
+    fn test_cli_color_flag_invalid_rejected() {
+        let res = Cli::try_parse_from(["taskkit", "--color", "bogus"]);
+        assert!(res.is_err());
     }
 }
