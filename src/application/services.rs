@@ -449,7 +449,7 @@ impl TaskService {
         }
 
         // Topological sort by dependency graph
-        Ok(crate::domain::topological_sort_tasks(&tasks))
+        crate::domain::topological_sort_tasks(&tasks)
     }
 }
 

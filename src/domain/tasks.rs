@@ -257,7 +257,8 @@ impl Task {
     /// Calculate next retry delay.
     pub fn retry_delay(&self) -> Duration {
         if let Some(ref policy) = self.retry_policy {
-            let exp_delay = policy.base_delay * 2u32.pow(self.retry_count);
+            let multiplier = 2u32.checked_pow(self.retry_count).unwrap_or(u32::MAX);
+            let exp_delay = policy.base_delay * multiplier;
             exp_delay.min(policy.max_delay)
         } else {
             Duration::from_secs(1)
@@ -307,12 +308,12 @@ impl Task {
 /// Uses Kahn's algorithm. Tasks with no dependencies come first,
 /// followed by tasks whose dependencies are satisfied.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if a cycle is detected in the dependency graph.
-pub fn topological_sort_tasks(tasks: &[Task]) -> Vec<Task> {
+/// Returns `TaskError::CycleDetected` if a cycle exists in the dependency graph.
+pub fn topological_sort_tasks(tasks: &[Task]) -> Result<Vec<Task>, TaskError> {
     if tasks.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let mut in_degree: HashMap<String, usize> = HashMap::new();
@@ -359,9 +360,11 @@ pub fn topological_sort_tasks(tasks: &[Task]) -> Vec<Task> {
         queue.sort();
     }
 
-    assert_eq!(visited.len(), tasks.len(), "cycle detected in task dependency graph");
+    if visited.len() != tasks.len() {
+        return Err(TaskError::CycleDetected);
+    }
 
-    sorted
+    Ok(sorted)
 }
 #[cfg(test)]
 mod tests {
@@ -484,8 +487,32 @@ mod tests {
     }
 
     #[test]
+    fn test_retry_delay_overflow_protection() {
+        // retry_count >= 32 would panic with direct 2u32.pow()
+        // Verify we use checked_pow and saturate gracefully
+        let mut task = Task::new("overflow-test").with_retry_policy(RetryPolicy {
+            max_attempts: 50,
+            base_delay: Duration::from_secs(1),
+            max_delay: Duration::from_secs(3600),
+            jitter: 0.0,
+        });
+
+        // retry_count at the panic boundary
+        task.retry_count = 32;
+        assert_eq!(task.retry_delay(), Duration::from_secs(3600));
+
+        // retry_count well beyond the panic threshold
+        task.retry_count = 50;
+        assert_eq!(task.retry_delay(), Duration::from_secs(3600));
+
+        // retry_count at u32::MAX
+        task.retry_count = u32::MAX;
+        assert_eq!(task.retry_delay(), Duration::from_secs(3600));
+    }
+
+    #[test]
     fn test_topological_sort_empty() {
-        let sorted = topological_sort_tasks(&[]);
+        let sorted = topological_sort_tasks(&[]).unwrap();
         assert!(sorted.is_empty());
     }
 
@@ -493,7 +520,7 @@ mod tests {
     fn test_topological_sort_no_deps() {
         let t1 = Task::new("a");
         let t2 = Task::new("b");
-        let sorted = topological_sort_tasks(&[t2.clone(), t1.clone()]);
+        let sorted = topological_sort_tasks(&[t2.clone(), t1.clone()]).unwrap();
         // Without deps, preserved in original order
         assert_eq!(sorted.len(), 2);
     }
@@ -504,7 +531,7 @@ mod tests {
         let t2 = Task::new("run-tests").with_dependency(t1.id.clone());
         let t3 = Task::new("deploy").with_dependency(t2.id.clone());
 
-        let sorted = topological_sort_tasks(&[t3.clone(), t2.clone(), t1.clone()]);
+        let sorted = topological_sort_tasks(&[t3.clone(), t2.clone(), t1.clone()]).unwrap();
         assert_eq!(sorted.len(), 3);
         // build-lib must be first, run-tests second, deploy third
         assert_eq!(sorted[0].name, "build-lib");
@@ -518,9 +545,10 @@ mod tests {
         let t2 = Task::new("b").with_dependency(t1.id.clone());
         t1.depends_on.push(t2.id.clone()); // a -> b -> a: cycle
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            topological_sort_tasks(&[t1, t2]);
-        }));
-        assert!(result.is_err());
+        let result = topological_sort_tasks(&[t1, t2]);
+        assert!(
+            matches!(result, Err(TaskError::CycleDetected)),
+            "expected CycleDetected error, got {result:?}"
+        );
     }
 }

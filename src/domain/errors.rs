@@ -51,6 +51,9 @@ pub enum TaskError {
     #[error("Serialization error: {0}")]
     SerializationError(String),
 
+    #[error("Cycle detected in task dependency graph")]
+    CycleDetected,
+
     #[error("Port error: {0}")]
     Port(#[from] PortError),
 }
@@ -108,6 +111,7 @@ mod tests {
             TaskError::InvalidOperation("bad".to_string()),
             TaskError::StorageError("io".to_string()),
             TaskError::ValidationError("bad".to_string()),
+            TaskError::CycleDetected,
             TaskError::SerializationError("json".to_string()),
         ];
         for v in variants {

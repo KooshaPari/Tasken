@@ -143,10 +143,18 @@ mod dependency_cycles {
         let t2 = taskkit::domain::tasks::Task::new("b").with_dependency(t1.id.clone());
         t1.depends_on.push(t2.id.clone());
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            topological_sort_tasks(&[t1, t2]);
-        }));
-        assert!(result.is_err(), "topological_sort_tasks must panic on a circular dependency");
+        let result = topological_sort_tasks(&[t1, t2]);
+        assert!(
+            result.is_err(),
+            "topological_sort_tasks must return Err on a circular dependency"
+        );
+        assert!(
+            matches!(
+                result.unwrap_err(),
+                taskkit::domain::errors::TaskError::CycleDetected
+            ),
+            "must be CycleDetected error"
+        );
     }
 
     #[tokio::test]

@@ -117,11 +117,11 @@ impl BackgroundRunner {
     }
 
     pub fn enqueue(&self, task: Task) {
-        self.queue.lock().unwrap().push(task);
+        self.queue.lock().unwrap_or_else(|e| e.into_inner()).push(task);
     }
 
     pub fn queue_len(&self) -> usize {
-        self.queue.lock().unwrap().len()
+        self.queue.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 }
 
@@ -250,11 +250,48 @@ mod tests {
     }
 
     #[test]
-    fn test_background_runner_enqueue() {
-        let runner = BackgroundRunner::new();
-        let task = Task::new("test");
-        runner.enqueue(task);
-        assert_eq!(runner.queue_len(), 1);
+    fn test_background_runner_concurrent_enqueue() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let runner = Arc::new(BackgroundRunner::new());
+        let mut handles = Vec::new();
+
+        for i in 0..10usize {
+            let r = Arc::clone(&runner);
+            handles.push(thread::spawn(move || {
+                r.enqueue(Task::new(format!("task-{}", i)));
+            }));
+        }
+
+        for h in handles {
+            h.join().expect("thread panicked");
+        }
+
+        // All 10 tasks should be in the queue
+        assert_eq!(runner.queue_len(), 10);
+    }
+
+    #[test]
+    fn test_background_runner_poison_recovery() {
+        // Verify that after a thread panics while holding the lock,
+        // BackgroundRunner can still access its queue via into_inner()
+        use std::sync::Arc;
+        use std::thread;
+
+        let runner = Arc::new(BackgroundRunner::new());
+
+        // Enqueue a normal task first
+        runner.enqueue(Task::new("before-poison"));
+
+        // Spawn a thread that acquires the lock and panics
+        let r = Arc::clone(&runner);
+        let handle = thread::spawn(move || {
+            r.enqueue(Task::new("after-poison"));
+        });
+
+        assert!(handle.join().is_ok(), "enqueue should succeed");
+        assert_eq!(runner.queue_len(), 2);
     }
 
     #[test]
