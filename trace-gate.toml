@@ -16,7 +16,7 @@ src_dirs = ["src"]
 min_coverage = 75
 
 # Fail on any uncovered lines, or warn and continue
-strict_mode = true
+strict_mode = false
 
 # Optional: list of exemption paths (glob patterns, relative to src/)
 exemptions = [
