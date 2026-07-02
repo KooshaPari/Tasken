@@ -13,6 +13,16 @@
 
 import "just/phenotype.just"
 
+# Verify that the project builds and tests pass (first-time setup)
+bootstrap:
+    @echo "=== bootstrap: verifying Rust toolchain ==="
+    @cargo --version
+    @echo "=== bootstrap: building workspace ==="
+    cargo build --workspace
+    @echo "=== bootstrap: running tests ==="
+    cargo test --workspace
+    @echo "✓ bootstrap complete"
+
 # Explicit recipe aliases for the required targets
 # These are thin wrappers around the shared phenotype.just recipes.
 
