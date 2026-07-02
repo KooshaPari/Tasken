@@ -95,6 +95,6 @@ jobs:
 
   trace-gate:
     name: FR Coverage Gate
-    uses: KooshaPari/phenotype-pm-core/.github/workflows/trace-gate.yml@main
+    uses: KooshaPari/phenotype-pm-core/.github/workflows/trace-gate.yml@master
 
 
