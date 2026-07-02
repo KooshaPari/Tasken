@@ -93,3 +93,8 @@ jobs:
         run: cargo deny check
         continue-on-error: true
 
+  trace-gate:
+    name: FR Coverage Gate
+    uses: KooshaPari/phenotype-pm-core/.github/workflows/trace-gate.yml@main
+
+
