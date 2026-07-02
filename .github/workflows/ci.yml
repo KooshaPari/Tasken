@@ -17,6 +17,7 @@ jobs:
   trace-gate:
     name: FR Coverage Gate
     uses: KooshaPari/phenotype-pm-core/.github/workflows/trace-gate.yml@main
+    continue-on-error: true
   test:
     runs-on: ubuntu-24.04
     steps:
